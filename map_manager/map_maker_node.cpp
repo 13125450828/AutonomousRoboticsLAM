@@ -14,7 +14,7 @@
 #include <geometry_msgs/Twist.h>
 #include <tf/transform_datatypes.h>
 #include <nav_msgs/OccupancyGrid.h>
-#include <>
+#include <nav_msgs/MapMetaData.h>
 
 //Callback function for the Position topic 
 void pose_callback(const geometry_msgs::PoseWithCovarianceStamped& msg)
@@ -34,15 +34,31 @@ int main(int argc, char **argv)
 	ros::NodeHandle n;
 
 	//Subscribe to the desired topics and assign callbacks
-	ros::Subscriber pose_sub = n.subscribe("/amcl_pose", 1, pose_callback);
+
+	// Si Te's Code file:	mapper_ray_trace.cpp
+	// publishes to this message which I use 
+	ros::Subscriber ray_trace_sub = n.subscribe("/ray_trace_output")
 
 	//Setup topics to Publish from this node
-	ros::Publisher map_pub = n.advertise<nav_msgs::OccupancyGrid>("",1);
-	// Si Te's Code file:	mapper_ray_trace.cpp
-	ros::Publisher velocity_publisher = n.advertise<geometry_msgs::Twist>("/cmd_vel_mux/input/navi", 1);
+	ros::Publisher map_pub = n.advertise<nav_msgs::OccupancyGrid>("map_publisher",1);
+	ros::Publisher map_meta_pub = n.advertise<nav_msgs::MapMetaData>("map_meta_data_pub",1);
 
-	//Velocity control variable
-	geometry_msgs::Twist vel;
+	//Creating updatable variables
+	nav_msgs::MapMetaData map_meta_data;
+	nav_msgs::OccupancyGrid map;
+
+	// Initialize the map_meta_data
+	map_meta_data.map_load_time = 0;
+	map_meta_data.resolution = 0.1; // [m/cell]
+	map_meta_data.width = uint(10 / map_meta_data.resolution); // [cells]
+	map_meta_data.height = uint(10 / map_meta_data.resolution); // [cells]
+
+ 	// Publish the map_meta_data
+	map_meta_pub.publish(map_meta_data);
+
+	// Setup the map
+	map.info = map_meta_data;
+	map.data = 
 
 	//Set the loop rate
 	ros::Rate loop_rate(20);    // 20Hz update rate
@@ -53,12 +69,20 @@ int main(int argc, char **argv)
 		ros::spinOnce();   //Check for new messages
     
 		//Main loop code goes here:
+
+
+
+
+
+
 		vel.linear.x = 0.2; // set linear speed
 		vel.angular.z = 0.2; // set angular speed
 
 		velocity_publisher.publish(vel); // Publish the command velocity
+
+
+
 		ROS_DEBUG("Main - Velocity commands: v - %f, w - %f", vel.linear.x, vel.angular.z);
- 
 	}
 
 	return 0;
