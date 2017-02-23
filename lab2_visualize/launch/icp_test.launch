@@ -1,0 +1,4 @@
+<launch>
+	<node pkg="rviz" type="rviz" name="icp_rviz_rviz" args = "-d $(find lab2_visualize)/launch/icp_test.rviz"/>
+
+</launch>
