@@ -28,6 +28,7 @@ float test_theta = 0.1;
 int outer_loop_count = 3;
 float grad_alpha = 0.001;
 float grad_beta = 0.001;
+float corr_test_skip = 1;
 
 bool new_params = false;
 void callback(icp::ICPConfig& config, uint32_t level) {
@@ -40,27 +41,8 @@ void callback(icp::ICPConfig& config, uint32_t level) {
   outer_loop_count = config.outer_loop_count;
   grad_alpha = config.grad_alpha;
   grad_beta = config.grad_beta;
+  corr_test_skip = config.corr_test_skip;
   new_params = true;
-}
-
-
-void CreateFakeLaserScan(sensor_msgs::LaserScan* scan)
-{
-  //sensor_msgs::LaserScan scan;
-  scan->header.frame_id = "map";
-  scan->angle_min = -0.5;
-  scan->angle_max = 0.5;
-  scan->angle_increment = (scan->angle_max - scan->angle_min)/test_scan_num;
-  scan->range_min = 0;
-  scan->range_max = 10;
-
-  scan->ranges = std::vector<float>();
-
-  //ROS_INFO_STREAM("Adding points: " << test_scan_num << " of " << test_scan_num);
-  for (int i = 0; i < test_scan_num; i++)
-  {
-    scan->ranges.push_back(3.0);
-  }
 }
 
 
@@ -193,7 +175,7 @@ std::vector<unsigned int> GetCorrespondances(std::vector<geometry_msgs::Point32>
     min_index = -1;
     index = 0;
 
-    for(std::vector<geometry_msgs::Point32>::iterator it2 = cloud2.begin(); it2 != cloud2.end(); ++it2)
+    for(std::vector<geometry_msgs::Point32>::iterator it2 = cloud2.begin(); it2 != cloud2.end(); std::advance(it2, 1+corr_test_skip))
     {
 
       dx = (*it1).x - (*it2).x;
@@ -260,7 +242,7 @@ void LaserCallback(sensor_msgs::LaserScan scan)
 }
 
 
-void Fake();
+void Fake(ros::Publisher test_pub1, ros::Publisher test_pub2, ros::Publisher test_pubres);
 void Real();
 
 int main(int argc, char **argv) {
@@ -275,23 +257,74 @@ int main(int argc, char **argv) {
   server.setCallback(f);
   ROS_INFO_STREAM("Dyn Rec Created");
 
-  ros::Publisher test_pub1 = n.advertise<sensor_msgs::PointCloud>("/cloud_1", 5);
-  ros::Publisher test_pub2 = n.advertise<sensor_msgs::PointCloud>("/cloud_2", 5);
-  ros::Publisher test_pubres = n.advertise<sensor_msgs::PointCloud>("/cloud_res", 5);
+  ros::Publisher vis_new = n.advertise<sensor_msgs::PointCloud>("/cloud_new", 5);
+  ros::Publisher vis_old= n.advertise<sensor_msgs::PointCloud>("/cloud_old", 5);
+  ros::Publisher vis_result = n.advertise<sensor_msgs::PointCloud>("/cloud_res", 5);
+  ros::Publisher mot_pub = n.advertise<geometry_msgs::Pose>("/icp_change", 5);
   ROS_INFO_STREAM("Publishers Created");
 
+  ros::Subscriber las_sub = n.subscribe("/scan", 10, LaserCallback);
+
   sleep(2);
+
+  
+  sensor_msgs::PointCloud old_cloud;
+  sensor_msgs::PointCloud new_cloud;
+  sensor_msgs::PointCloud cloud_disp;
 
   while(ros::ok())
   {
     
-    //Fake();
+    //ROS_INFO_STREAM("Transfering data to clouds");
 
-    if (got_new_scan)
+
+    if(got_new_scan && (!old_scan.ranges.empty() && !new_scan.ranges.empty()))
     {
-      Real();
+      TransformScan(&old_scan, &cloud_disp);
+      TransformScan(&new_scan, &new_cloud);
+
+      trans t;
+      t.tx = test_tx;
+      t.ty = test_ty;
+      t.theta = test_theta;
+
+      ROS_INFO_STREAM("Starting ICP");
+      vis_new.publish(new_cloud);
+      vis_old.publish(old_cloud);
+
+      ros::Time t1 = ros::Time::now();
+      trans new_t = ICP(&old_cloud, &new_cloud, &cloud_disp, &vis_result);
+      ros::Time t2 = ros::Time::now();
+
+      ROS_INFO_STREAM("ICP time (s): " << (t2 - t1).toSec());
+      ROS_INFO_STREAM("Final: " << new_t.tx << ", " << new_t.ty << ", " << new_t.theta);
+
+
+      TransformCloud(&old_cloud, new_t);
+      vis_result.publish(new_cloud);
+
+
+      geometry_msgs::Pose pose_out;
+
+      pose_out.position.x = new_t.tx;
+      pose_out.position.y = new_t.ty;
+      pose_out.position.z = 0;
+
+      pose_out.orientation.w = cos(new_t.theta/2.0);
+      pose_out.orientation.x = 0;
+      pose_out.orientation.y = 0;
+      pose_out.orientation.z = sin(new_t.theta/2.0);
+
+      mot_pub.publish(pose_out);
+
       got_new_scan = false;
     }
+
+    if(!new_scan.ranges.empty())
+    {
+      old_scan = new_scan;
+    }
+
 
     ros::spinOnce();
   }
@@ -301,62 +334,11 @@ int main(int argc, char **argv) {
 
 void Real()
 {
-  
+
 }
 
-void Fake()
+void Fake(ros::Publisher test_pub1, ros::Publisher test_pub2, ros::Publisher test_pubres)
 {
   //ROS_INFO_STREAM("Creating Scans");
-    sensor_msgs::LaserScan scan1;
-    CreateFakeLaserScan(&scan1);
-    sensor_msgs::LaserScan scan2;
-    CreateFakeLaserScan(&scan2);
-
-    //ROS_INFO_STREAM("Creating Clouds");
-    laser_geometry::LaserProjection projector_;
-    //sensor_msgs::PointCloud cloud;
     
-    sensor_msgs::PointCloud cloud1;
-    TransformScan(&scan1, &cloud1);
-    sensor_msgs::PointCloud cloud2;
-    TransformScan(&scan2, &cloud2);
-
-    sensor_msgs::PointCloud cloud_disp;
-    TransformScan(&scan1, &cloud_disp);
-    //ROS_INFO_STREAM("Transfering data to clouds");
-
-    if(!scan1.ranges.empty() && !scan2.ranges.empty())
-    {
-
-      trans t;
-      t.tx = test_tx;
-      t.ty = test_ty;
-      t.theta = test_theta;
-
-      //ROS_INFO_STREAM("Transforming C2");
-      TransformCloud(&cloud2, t);
-
-      ROS_INFO_STREAM("Starting ICP");
-
-      test_pub1.publish(cloud1);
-      test_pub2.publish(cloud2);
-
-      ros::Time t1 = ros::Time::now();
-      trans new_t = ICP(&cloud1, &cloud2, &cloud_disp, &test_pubres);
-      ros::Time t2 = ros::Time::now();
-
-      ROS_INFO_STREAM("ICP time (s): " << (t2 - t1).toSec());
-      ROS_INFO_STREAM("Final: " << new_t.tx << ", " << new_t.ty << ", " << new_t.theta);
-
-      
-
-      TransformCloud(&cloud1, new_t);
-      test_pubres.publish(cloud1);
-
-      sleep(5);
-    }
-    else
-    {
-      ROS_INFO_STREAM("Empty Scans");
-    }
 }
