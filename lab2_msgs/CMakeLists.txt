@@ -54,7 +54,7 @@ find_package(catkin REQUIRED COMPONENTS
 add_message_files(
    FILES
    index.msg
-   raytrace_out.msg
+   occupancy_update.msg
  )
 
 ## Generate services in the 'srv' folder
@@ -72,10 +72,13 @@ add_message_files(
 # )
 
 ## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   geometry_msgs#   nav_msgs#   sensor_msgs#   std_msgs
-# )
+generate_messages(
+  DEPENDENCIES
+  geometry_msgs#   
+  nav_msgs#   
+  sensor_msgs#   
+  std_msgs
+)
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
