@@ -9,6 +9,10 @@
 #include <sensor_msgs/LaserScan.h>
 #include <laser_geometry/laser_geometry.h>
 
+sensor_msgs::LaserScan old_scan;
+sensor_msgs::LaserScan new_scan;
+bool got_new_scan = false;
+
 struct trans
 {
   float tx;
@@ -249,6 +253,16 @@ trans ICP(sensor_msgs::PointCloud* c1, sensor_msgs::PointCloud* c2, sensor_msgs:
 }
 
 
+void LaserCallback(sensor_msgs::LaserScan scan)
+{
+  new_scan = scan;
+  got_new_scan = true;
+}
+
+
+void Fake();
+void Real();
+
 int main(int argc, char **argv) {
   ROS_INFO_STREAM("Starting");
   ros::init(argc, argv, "icp_node");
@@ -270,7 +284,29 @@ int main(int argc, char **argv) {
 
   while(ros::ok())
   {
-    //ROS_INFO_STREAM("Creating Scans");
+    
+    //Fake();
+
+    if (got_new_scan)
+    {
+      Real();
+      got_new_scan = false;
+    }
+
+    ros::spinOnce();
+  }
+  
+  return 0;
+}
+
+void Real()
+{
+  
+}
+
+void Fake()
+{
+  //ROS_INFO_STREAM("Creating Scans");
     sensor_msgs::LaserScan scan1;
     CreateFakeLaserScan(&scan1);
     sensor_msgs::LaserScan scan2;
@@ -323,10 +359,4 @@ int main(int argc, char **argv) {
     {
       ROS_INFO_STREAM("Empty Scans");
     }
-
-
-    ros::spinOnce();
-  }
-  
-  return 0;
 }
