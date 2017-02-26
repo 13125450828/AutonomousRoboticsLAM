@@ -1,0 +1,4 @@
+<launch>
+	<node pkg="rviz" type="rviz" name="pf_rviz_rviz" args = "-d $(find lab2_visualize)/launch/pf.rviz"/>
+
+</launch>
