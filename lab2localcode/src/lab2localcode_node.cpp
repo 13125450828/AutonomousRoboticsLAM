@@ -337,8 +337,8 @@ int main(int argc, char **argv)
                 
                 //ROS_INFO("X PDF Params: %f --- %f --- %f",Y_matrix[0], particleMatrix(0,i),0.01);
                 //ROS_INFO("Y PDF Params: %f --- %f --- %f",Y_matrix[1], particleMatrix(1,i),0.01);
-                ROS_INFO("Yaw PDF Params: %f --- %f --- %f",Y_matrix[2], particleMatrix(2,i),0.01);
-                //ROS_INFO("Weights: %f --- %f --- %f",Weights[1],Weights[2],Weights[3]);
+                ROS_INFO("Yaw PDF Params: %f --- %f --- %f",Y_matrix[2], particleMatrix(2,i),0.1);
+               
                 
 
                 //Combine and store as 3rd element in particleMatrix
@@ -346,11 +346,14 @@ int main(int argc, char **argv)
                 //not doing yaw weights right now cuz it was giving me fuckery  
                 //particleMatrix(3,i) = 1/(Q*Q*2*M_PI)*exp(-(pow(Y_matrix[0]-particleMatrix(0,i),2)/(2*Q*Q)+pow(Y_matrix[1]-particleMatrix(1,i),2)/(2*Q*Q)));
                 particleMatrix(3,i) = Weights[1]*Weights[2]*Weights[3];
+                // ROS_INFO("Weights: %f --- %f --- %f ---- %f",Weights[1],Weights[2],Weights[3], particleMatrix(3,i));
                 //Compute a cumulative weight for resampling the particles later on 
                 if (i==0) 
                     CumSum[i] = particleMatrix(3,i);
-                else
-                    CumSum[i] = CumSum[i-1] + particleMatrix(3,1);
+                else{
+                    CumSum[i] = CumSum[i-1] + particleMatrix(3,i);
+                   // ROS_INFO("CUMSUM[i] : %f",CumSum[i]);
+                }
 
                 //Draw the particle 
                 marker_point.x = particleMatrix(0,i);
@@ -358,7 +361,7 @@ int main(int argc, char **argv)
                 //points.points.push_back(marker_point);
                 drawPoint(i, marker_point.x, marker_point.y, 0);
             }
-            ROS_INFO("Weights: %f ",CumSum[NUM_PARTICLES-1]);
+            //ROS_INFO("Weights: %f ",CumSum[NUM_PARTICLES-2]);
 
             //Create our path based on averaging our particles
             final_pos.pose.position.x = sum_x / NUM_PARTICLES;
@@ -371,14 +374,17 @@ int main(int argc, char **argv)
                 for (int j = 0; j < NUM_PARTICLES; j++)
                 {
                     seed = CumSum[NUM_PARTICLES-1]*rand()/RAND_MAX;
+                    //ROS_INFO("SEED: %f CUMSUM[NUM_PARTICLES-1]: %f",seed,CumSum[NUM_PARTICLES-1]);
 
                     // Determine Particles Greater than the Seed
-                    for (int i = 0; i< NUM_PARTICLES; i++)
+                    for (int i = 0; i< NUM_PARTICLES; i++){
+                        //ROS_INFO("CUMSUM[i]: %f",CumSum[i]);
                         if (CumSum[i] >= seed)
                         {
                             tempindex = i;
-                            break;
+                            i=NUM_PARTICLES+1;
                         }
+                    }
 
                     bestPDFParticles (0,j) = particleMatrix(0,tempindex);
                     bestPDFParticles (1,j) = particleMatrix(1,tempindex);
