@@ -247,7 +247,7 @@ int main(int argc, char **argv)
     for (int i = 0; i < NUM_PARTICLES; i++){
         particleMatrix (0,i) = (double) randfactor*rand()/RAND_MAX;
         particleMatrix (1,i) = (double) randfactor*rand()/RAND_MAX;
-        particleMatrix (2,i) = double (rand())/RAND_MAX * 2 * M_PI - M_PI;
+        particleMatrix (2,i) = (double) rand()/RAND_MAX * 2 * M_PI - M_PI;  
     }
     //Set the loop rate
     ros::Rate loop_rate(ROSLOOPRATE);    //10Hz update rate
@@ -308,7 +308,7 @@ int main(int argc, char **argv)
                 Y_matrix[0] = Y_matrix[0] + dt*cos(Y_matrix[2])*X_input[0];
                 Y_matrix[1] = Y_matrix[1] + dt*sin(Y_matrix[2])*X_input[1];
                 Y_matrix[2] = Y_matrix[2] + dt*X_input[2];
-                Y_matrix[2] = atan2(sin(Y_matrix[2]), cos(Y_matrix[2]));
+                //Y_matrix[2] = atan2(sin(Y_matrix[2]), cos(Y_matrix[2]));
             ROS_INFO("IPS X: %f Y: %f Yaw: %f", ips_x, ips_y,ips_yaw);
             ROS_INFO("Inputs X: %f Y: %f Yaw: %f", X_input[0], X_input[1],X_input[2]);
 
@@ -322,30 +322,30 @@ int main(int argc, char **argv)
                 particleMatrix(0,i) = particleMatrix(0,i) + dt*cos(particleMatrix(2,i))*X_input[0] + sampleNormdist(0,Q_matrix[0]); //x update
                 particleMatrix(1,i) = particleMatrix(1,i) + dt*sin(particleMatrix(2,i))*X_input[1] + sampleNormdist(0,Q_matrix[1]); //y update 
                 particleMatrix(2,i) = particleMatrix(2,i) + dt*X_input[2]; //TODO add noise to yaw update 
-                particleMatrix(2,i) = atan2(sin(particleMatrix(2,i)),cos(particleMatrix(2,i))); //Convert YAW to a bearing 
-
+                //particleMatrix(2,i) = atan2(sin(particleMatrix(2,i)),cos(particleMatrix(2,i))); //Convert YAW to a bearing 
+                ROS_INFO("Angular vel: %f", X_input[2]);
                 //Calculate individual weights
-                /*
+                
                 Weights[1]= normal_pdf(Y_matrix[0], particleMatrix(0,i),0.01);
                 Weights[2]= normal_pdf(Y_matrix[1], particleMatrix(1,i),0.01);
                 Weights[3]= normal_pdf(Y_matrix[2], particleMatrix(2,i),0.1);
-                */
+                
 
                 //Sum x and y for pose output 
                 sum_x = sum_x + particleMatrix(0,i);
                 sum_y = sum_y + particleMatrix(1,i);
-                /*
-                ROS_INFO("X PDF Params: %f --- %f --- %f",Y_matrix[0], particleMatrix(0,i),0.01);
-                ROS_INFO("Y PDF Params: %f --- %f --- %f",Y_matrix[1], particleMatrix(1,i),0.01);
+                
+                //ROS_INFO("X PDF Params: %f --- %f --- %f",Y_matrix[0], particleMatrix(0,i),0.01);
+                //ROS_INFO("Y PDF Params: %f --- %f --- %f",Y_matrix[1], particleMatrix(1,i),0.01);
                 ROS_INFO("Yaw PDF Params: %f --- %f --- %f",Y_matrix[2], particleMatrix(2,i),0.01);
-                ROS_INFO("Weights: %f --- %f --- %f",Weights[1],Weights[2],Weights[3]);
-                */
+                //ROS_INFO("Weights: %f --- %f --- %f",Weights[1],Weights[2],Weights[3]);
+                
 
                 //Combine and store as 3rd element in particleMatrix
                 //particleMatrix(3,i) = Weights[1]*Weights[2]*Weights[3];
                 //not doing yaw weights right now cuz it was giving me fuckery  
-                particleMatrix(3,i) = 1/(Q*Q*2*M_PI)*exp(-(pow(Y_matrix[0]-particleMatrix(0,i),2)/(2*Q*Q)+pow(Y_matrix[1]-particleMatrix(1,i),2)/(2*Q*Q)));
-
+                //particleMatrix(3,i) = 1/(Q*Q*2*M_PI)*exp(-(pow(Y_matrix[0]-particleMatrix(0,i),2)/(2*Q*Q)+pow(Y_matrix[1]-particleMatrix(1,i),2)/(2*Q*Q)));
+                particleMatrix(3,i) = Weights[1]*Weights[2]*Weights[3];
                 //Compute a cumulative weight for resampling the particles later on 
                 if (i==0) 
                     CumSum[i] = particleMatrix(3,i);
@@ -389,9 +389,9 @@ int main(int argc, char **argv)
         marker_pub.publish(points);
         path_pub.publish(path);
         //uncomment this if you want to send a fixed velocity command to test the particle filter X = 0.1 Z = 0.1 works well
-        vel.linear.x = 0.1; // set linear speed
-        vel.angular.z = 0.1; // set angular speed
-        velocity_publisher.publish(vel); // Publish the command velocity   
+        //vel.linear.x = 0.1; // set linear speed
+        //vel.angular.z = 0.1; // set angular speed
+        //velocity_publisher.publish(vel); // Publish the command velocity   
     }
     return 0;
 }
