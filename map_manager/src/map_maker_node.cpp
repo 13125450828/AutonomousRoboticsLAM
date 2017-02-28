@@ -101,7 +101,7 @@ int main(int argc, char **argv)
 	ros::Subscriber occupancy_update_sub = n.subscribe("raytrace_output", 1, occupancy_update_callback);
 
 	// Setup topics to Publish from this node
-	map_pub = n.advertise<nav_msgs::OccupancyGrid>("map",1);
+	map_pub = n.advertise<nav_msgs::OccupancyGrid>("occupancy_map",1);
 	map_meta_pub = n.advertise<nav_msgs::MapMetaData>("map_meta_data",1);
 
 	// Creating updatable variables
@@ -113,8 +113,12 @@ int main(int argc, char **argv)
 	map_meta_data.height = MAP_HEIGHT; // [cells]
 
 	// Initalize the map
-	std::vector<signed char> map_data (MAP_SIZE, -1);
+	std::vector<signed char> map_data (MAP_SIZE, 50);
 
+	for (int i=30; i<130; i++) {
+		map_data[i] = 90;
+	}
+	
 	//Setting to map struct
 	map.info = map_meta_data;
 	map.data = map_data;
