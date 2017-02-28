@@ -20,6 +20,7 @@
 const float MAP_RESOLUTION = 0.1;
 const int MAP_WIDTH = uint(10 / MAP_RESOLUTION);
 const int MAP_HEIGHT = MAP_WIDTH;
+const int MAP_SIZE = MAP_WIDTH * MAP_HEIGHT;
 
 const double empty_L = log(0.01 / (1-0.01));
 const double occupied_L = log(0.99 / (1-0.99));
@@ -28,10 +29,6 @@ const double initial_L = log(0.5 / (1-0.5));
 // Initialize the map
 //char map_data[MAP_WIDTH * MAP_HEIGHT];
 nav_msgs::OccupancyGrid map;
-
-// Create Global Publishers
-ros::Publisher map_pub;
-ros::Publisher map_meta_pub;
 
 double log_odd (int P)
 {
@@ -96,6 +93,10 @@ int main(int argc, char **argv)
 
 	//Subscribe to the desired topics and assign callbacks
 	
+	// Create Publishers
+	ros::Publisher map_pub;
+	ros::Publisher map_meta_pub;
+
 	// Si Te's code publishes to this message which I use 
 	ros::Subscriber occupancy_update_sub = n.subscribe("raytrace_output", 1, occupancy_update_callback);
 
@@ -112,11 +113,11 @@ int main(int argc, char **argv)
 	map_meta_data.height = MAP_HEIGHT; // [cells]
 
 	// Initalize the map
-	for (int intI = 0; intI < (MAP_HEIGHT * MAP_WIDTH); intI++) 
-		map.data[intI] = -1; 
+	std::vector<signed char> map_data (MAP_SIZE, -1);
 
+	//Setting to map struct
 	map.info = map_meta_data;
-	//map.data = map_data;
+	map.data = map_data;
 
 	//Set the loop rate
 	ros::Rate loop_rate(10);    // 20Hz update rate

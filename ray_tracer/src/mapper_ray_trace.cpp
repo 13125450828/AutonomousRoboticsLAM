@@ -199,11 +199,11 @@ int main(int argc, char **argv) {
 
 	// Initialize rostopics
 	// Note: 2nd param is buffer size
-	ros::Publisher raytrace_output = n.advertise<lab2_msgs::occupancy_update>("raytrace_output", 100);
+	ros::Publisher raytrace_output = n.advertise<lab2_msgs::occupancy_update>("/raytrace_output", 10);
 
-	ros::Subscriber map_details_sub = n.subscribe<nav_msgs::MapMetaData>("map_details", 100, map_details_callback);
-	ros::Subscriber refined_pose_sub = n.subscribe<geometry_msgs::Pose>("refined_pose", 100, refined_pose_callback);
-	ros::Subscriber scan_sub = n.subscribe<sensor_msgs::LaserScan>("scan", 100, scan_callback);
+	ros::Subscriber map_details_sub = n.subscribe<nav_msgs::MapMetaData>("/map_meta_data", 10, map_details_callback);
+	ros::Subscriber refined_pose_sub = n.subscribe<geometry_msgs::Pose>("/indoor_pos", 10, refined_pose_callback);
+	ros::Subscriber scan_sub = n.subscribe<sensor_msgs::LaserScan>("/scan", 10, scan_callback);
 
 
 	Point min_xy_corner = {.x=-2, .y=-2};
