@@ -219,8 +219,9 @@ int main(int argc, char **argv)
     std::vector<float> Y_matrix(3); //Measurements
     std::vector<float> X_input(3); //Inputs 
     std::vector<float> R_matrix(3); //Measurement noise
-    std::vector<float> Q_matrix(3); //Model Noise
+    std::vector<float> Q_matrix(3); //Model Noise assume DIAG 
     std::vector<float> Weights(3);
+
     Q_matrix [0] = 0.01;
     Q_matrix [1] = 0.01;
     Q_matrix [2] = 0.01;
@@ -291,14 +292,15 @@ int main(int argc, char **argv)
         {
             motion = false;
             loopcounter ++;
-            /* 
+            
             //get measurements from IPS or Odom 
-            if (loopcounter % 10 == 0)
+            if (loopcounter % 10 == 0) //IPS at 1 HZ 
             {
                 //only use IPS at 1 Hz 
                 Y_matrix[0] = ips_x + sampleNormdist(0,0.1);
                 Y_matrix[1] = ips_y + sampleNormdist(0,0.1);
                 Y_matrix[2] = ips_yaw + sampleNormdist(0,0);
+                Y_matrix[2] = atan2(sin(Y_matrix[2]), cos(Y_matrix[2]));
             }
             else
             {
@@ -307,14 +309,14 @@ int main(int argc, char **argv)
                 Y_matrix[2] = Y_matrix[2] + dt*X_input[2];
                 Y_matrix[2] = atan2(sin(Y_matrix[2]), cos(Y_matrix[2]));
             }
-            */
+            
             //Right now take only ODOM, IPS from Gazebo updates slow? 
-                Y_matrix[0] = Y_matrix[0] + dt*cos(Y_matrix[2])*X_input[0];
-                Y_matrix[1] = Y_matrix[1] + dt*sin(Y_matrix[2])*X_input[1];
-                Y_matrix[2] = Y_matrix[2] + dt*X_input[2];
+                //Y_matrix[0] = Y_matrix[0] + dt*cos(Y_matrix[2])*X_input[0];
+                //Y_matrix[1] = Y_matrix[1] + dt*sin(Y_matrix[2])*X_input[1];
+                //Y_matrix[2] = Y_matrix[2] + dt*X_input[2];
                 //Y_matrix[2] = atan2(sin(Y_matrix[2]), cos(Y_matrix[2]));
-            ROS_INFO("IPS X: %f Y: %f Yaw: %f", ips_x, ips_y,ips_yaw);
-            ROS_INFO("Inputs X: %f Y: %f Yaw: %f", X_input[0], X_input[1],X_input[2]);
+                ROS_INFO("IPS X: %f Y: %f Yaw: %f", ips_x, ips_y,ips_yaw);
+                ROS_INFO("Inputs X: %f Y: %f Yaw: %f", X_input[0], X_input[1],X_input[2]);
 
                 double sum_x=0; //used for averaging particles
                 double sum_y=0; //used for averaging particles 
@@ -326,7 +328,7 @@ int main(int argc, char **argv)
                 //Simple motion model --> xk+1 = xk + dt*vx + w 
                 particleMatrix(0,i) = particleMatrix(0,i) + dt*cos(particleMatrix(2,i))*X_input[0] + sampleNormdist(0,Q_matrix[0]); //x update
                 particleMatrix(1,i) = particleMatrix(1,i) + dt*sin(particleMatrix(2,i))*X_input[1] + sampleNormdist(0,Q_matrix[1]); //y update 
-                particleMatrix(2,i) = particleMatrix(2,i) + dt*X_input[2]; //TODO add noise to yaw update 
+                particleMatrix(2,i) = particleMatrix(2,i) + dt*X_input[2] + sampleNormdist(0,Q_matrix[2]);; //TODO add noise to yaw update 
                 //particleMatrix(2,i) = atan2(sin(particleMatrix(2,i)),cos(particleMatrix(2,i))); //Convert YAW to a bearing 
                 ROS_INFO("Angular vel: %f", X_input[2]);
                 //Calculate individual weights
