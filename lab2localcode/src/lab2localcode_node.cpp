@@ -7,7 +7,7 @@
 // 
 // Author: James Servos 
 // Edited: Nima Mohajerin
-//
+    //
 // //////////////////////////////////////////////////////////
 
 #include <ros/ros.h>
@@ -30,6 +30,7 @@
 #include <cmath>
 #include <Eigen/Dense>
 #include <math.h>
+#include <tf/transform_datatypes.h>
 
 using namespace Eigen;
 
@@ -124,6 +125,7 @@ ros::Subscriber odom_sub;
 //ros::Publisher = n.advertise<geometry_msgs::PoseStamped>("/pose", 1, true);
 ros::Publisher marker_pub;
 ros::Publisher path_pub;
+ros::Publisher pose_pub;
 
 //Bresenham line algorithm (pass empty vectors)
 // Usage: (x0, y0) is the first point and (x1, y1) is the second point. The calculated
@@ -204,6 +206,8 @@ int main(int argc, char **argv)
     //ros::Publisher = n.advertise<geometry_msgs::PoseStamped>("/pose", 1, true);
     marker_pub = n.advertise<visualization_msgs::Marker>("visualization_marker", 1, true);
     path_pub = n.advertise<nav_msgs::Path>("/path", 1, true);
+    pose_pub = n.advertise<geometry_msgs::PoseStamped>("/estimatedpose",1,true);
+
     geometry_msgs::Point marker_point;
     geometry_msgs::PoseStamped final_pos;
     nav_msgs::Path path;
@@ -314,6 +318,7 @@ int main(int argc, char **argv)
 
                 double sum_x=0; //used for averaging particles
                 double sum_y=0; //used for averaging particles 
+                double sum_yaw=0;
 
 
             //Update particles from motion model and assign weighs to each particle based on measurements 
@@ -334,13 +339,12 @@ int main(int argc, char **argv)
                 //Sum x and y for pose output 
                 sum_x = sum_x + particleMatrix(0,i);
                 sum_y = sum_y + particleMatrix(1,i);
+                sum_yaw = sum_yaw + particleMatrix(1,i);
                 
                 //ROS_INFO("X PDF Params: %f --- %f --- %f",Y_matrix[0], particleMatrix(0,i),0.01);
                 //ROS_INFO("Y PDF Params: %f --- %f --- %f",Y_matrix[1], particleMatrix(1,i),0.01);
                 ROS_INFO("Yaw PDF Params: %f --- %f --- %f",Y_matrix[2], particleMatrix(2,i),0.1);
                
-                
-
                 //Combine and store as 3rd element in particleMatrix
                 //particleMatrix(3,i) = Weights[1]*Weights[2]*Weights[3];
                 //not doing yaw weights right now cuz it was giving me fuckery  
@@ -367,6 +371,13 @@ int main(int argc, char **argv)
             final_pos.pose.position.x = sum_x / NUM_PARTICLES;
             final_pos.pose.position.y = sum_y / NUM_PARTICLES;
             final_pos.pose.position.z = 0;
+
+
+            geometry_msgs::Quaternion est_quat = tf::createQuaternionMsgFromYaw(sum_yaw/NUM_PARTICLES);
+
+            final_pos.pose.orientation = est_quat;
+
+
             path.poses.push_back(final_pos);            
             double seed;
             // For resampiling particles based on weight seeding
@@ -394,6 +405,7 @@ int main(int argc, char **argv)
             }
         marker_pub.publish(points);
         path_pub.publish(path);
+        pose_pub.publish(final_pos);
         //uncomment this if you want to send a fixed velocity command to test the particle filter X = 0.1 Z = 0.1 works well
         //vel.linear.x = 0.1; // set linear speed
         //vel.angular.z = 0.1; // set angular speed
