@@ -18,7 +18,8 @@
 #include "lab2_msgs/occupancy_update.h"
 
 const float MAP_RESOLUTION = 0.1;
-const int MAP_WIDTH = uint(10 / MAP_RESOLUTION);
+const int MAP_SIDE_LENGTH = 10;
+const int MAP_WIDTH = uint(MAP_SIDE_LENGTH / MAP_RESOLUTION);
 const int MAP_HEIGHT = MAP_WIDTH;
 const int MAP_SIZE = MAP_WIDTH * MAP_HEIGHT;
 
@@ -57,12 +58,15 @@ void occupancy_update_callback(const lab2_msgs::occupancy_update& msg)
 		i = msg.filled[intI].row;
 		j = msg.filled[intI].col;
 
-		data_cell = i*MAP_WIDTH + j;
+		if (i>=0) || (j>=0)
+		{
+			data_cell = i*MAP_WIDTH + j;
 
-		if (map.data[data_cell] == -1)
-			prev_L = initial_L;
-		else
-			prev_L = log_odd(map.data[data_cell]);
+			if (map.data[data_cell] == -1)
+				prev_L = initial_L;
+			else
+				prev_L = log_odd(map.data[data_cell]);
+		}
 
 		// Update
 		map.data[data_cell] = char(inv_log_odd(occupied_L + prev_L - initial_L));
@@ -72,13 +76,16 @@ void occupancy_update_callback(const lab2_msgs::occupancy_update& msg)
 	{
 		i = msg.unfilled[intI].row;
 		j = msg.unfilled[intI].col;
+		
+		if (i>=0) || (j>=0)
+		{
+			data_cell = i*MAP_WIDTH + j;
 
-		data_cell = i*MAP_WIDTH + j;
-
-		if (map.data[data_cell] == -1)
-			prev_L = initial_L;
-		else
-			prev_L = log_odd(map.data[data_cell]);
+			if (map.data[data_cell] == -1)
+				prev_L = initial_L;
+			else
+				prev_L = log_odd(map.data[data_cell]);
+		}
 
 		// Update
 		map.data[data_cell] = char(inv_log_odd(empty_L + prev_L - initial_L));
@@ -111,6 +118,8 @@ int main(int argc, char **argv)
 	map_meta_data.resolution = MAP_RESOLUTION; // [m/cell]
 	map_meta_data.width = MAP_WIDTH; // [cells]
 	map_meta_data.height = MAP_HEIGHT; // [cells]
+	map_meta_data.origin.position.x = -MAP_SIDE_LENGTH/2; // Position the grid at -5 [m]
+	map_meta_data.origin.position.y = -MAP_SIDE_LENGTH/2; // Position the grid at -5 [m]
 
 	// Initalize the map
 	std::vector<signed char> map_data (MAP_SIZE, 50);
