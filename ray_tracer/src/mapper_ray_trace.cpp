@@ -9,6 +9,7 @@
 #include <set>
 #include <tf/transform_datatypes.h>
 #include <vector>
+#include <visualization_msgs/Marker.h>
 
 // Definitions
 struct Point {
@@ -34,9 +35,14 @@ nav_msgs::MapMetaData _map_data;
 geometry_msgs::Pose _robot_pose;
 sensor_msgs::LaserScan _laser_scan;
 
+Point min_xy_corner = {.x=-5, .y=-5};
+Point max_xy_corner = {.x=5, .y=5};
 
 bool gotMapMetaData = false;
 bool gotNewLaserScan = false;
+
+//visualization
+visualization_msgs::Marker marker_filled_points;
 
 // Outputs an array of unfilled cell coordinates (normalized to occupancy grid index format)
 //Bresenham line algorithm (pass empty vectors)
@@ -97,6 +103,9 @@ Point robot_pose_to_norm_position(geometry_msgs::Pose &robot_pose, nav_msgs::Map
 	float norm_x = top_left_x / map_data.resolution;
 	float norm_y = top_left_y / map_data.resolution;
 
+	ROS_INFO("norm_x: %f", norm_x);
+	ROS_INFO("norm_y: %f", norm_y);
+
 	Point norm_position = {norm_x, norm_y};
 	return norm_position;
 }
@@ -145,11 +154,36 @@ void laser_scan_to_points(Point robot_norm_position, float yaw, sensor_msgs::Las
 		int laser_x = robot_norm_position.x + laser_add_x;
 		int laser_y = robot_norm_position.y + laser_add_y;
 		Point curr_laser_point = {.x= laser_x, .y= laser_y };
+
+		ROS_INFO("curr_laser_point: [%f, %f]", curr_laser_point.x, curr_laser_point.y);
 		norm_pts.push_back(curr_laser_point);
 	}
 
 	return;
 }
+
+void show_filled_laser_points(Point visualization_point) {
+
+    geometry_msgs::Point p;
+   	p.x = visualization_point.x;
+   	p.y = visualization_point.y;
+   	p.z = 0; //not used
+   	marker_filled_points.points.push_back(p);
+}
+
+
+void setup_visualization_marker(visualization_msgs::Marker& marker) {
+	marker_filled_points.header.frame_id = "/odom";
+    marker_filled_points.ns              = "filled_laser_points";
+    marker_filled_points.action = visualization_msgs::Marker::ADD;
+    marker_filled_points.id = 0;
+    marker_filled_points.type = visualization_msgs::Marker::POINTS;
+    marker_filled_points.scale.x = 0.1;
+    marker_filled_points.scale.y = 0.1;
+    marker_filled_points.color.b = 1.0f;
+    marker_filled_points.color.a = 1;
+}
+
 
 // Get all filled points for publishing
 // input: normalized float points from laser scan
@@ -186,7 +220,7 @@ void points_to_indices(std::vector<Point> points, std::vector<lab2_msgs::index> 
 void map_details_callback(const nav_msgs::MapMetaData& map_details) {
 
 	_map_data = map_details;
-	// ROS_INFO("MAAAP: res: %f, w: %d", _map_data.resolution, _map_data.width);
+
 	gotMapMetaData = true;
 }
 
@@ -222,9 +256,9 @@ int main(int argc, char **argv) {
 	ros::Subscriber refined_pose_sub = n.subscribe("/estimatedpose", 10, refined_pose_callback);
 	ros::Subscriber scan_sub = n.subscribe("/scan", 10, scan_callback);
 
+	//Visualization
+	ros::Publisher filled_points_pub = n.advertise<visualization_msgs::Marker>("filled_laser_points", 1, true);
 
-	Point min_xy_corner = {.x=-2, .y=-2};
-	Point max_xy_corner = {.x=2, .y=2};
 
 	ros::Rate loop_rate(10);
 
@@ -239,6 +273,11 @@ int main(int argc, char **argv) {
      	}
      	gotNewLaserScan = false;
 
+
+     	//RESETTING VARIABLES
+     	visualization_msgs::Marker empty_marker_struct;
+     	marker_filled_points = empty_marker_struct;
+     	setup_visualization_marker(marker_filled_points);
 
 		// *******************************
 		// Conversion
@@ -272,8 +311,8 @@ int main(int argc, char **argv) {
 		for (it = unfilled_cells_set.begin(); it != unfilled_cells_set.end(); ++it) {
 			Point curr_pt = *it;
 			lab2_msgs::index curr_index;
-			curr_index.row = int(curr_pt.x);
-			curr_index.col = int(curr_pt.y);
+			curr_index.row = int(round(curr_pt.x));
+			curr_index.col = int(round(curr_pt.y));
 
 			unfilled_cells.push_back(curr_index);
 		}
@@ -286,6 +325,9 @@ int main(int argc, char **argv) {
 		output_msg.unfilled = unfilled_cells;
 
 		raytrace_output.publish(output_msg);
+
+		//visualization publish
+		filled_points_pub.publish(marker_filled_points);
 
 	}
 

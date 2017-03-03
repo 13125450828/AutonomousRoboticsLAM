@@ -62,14 +62,14 @@ void occupancy_update_callback(const lab2_msgs::occupancy_update& msg)
 		{
 			data_cell = i*MAP_WIDTH + j;
 
-			if (map.data[data_cell] == -1)
+			if (map.data[data_cell] == 50)
 				prev_L = initial_L;
 			else
 				prev_L = log_odd(map.data[data_cell]);
 		}
 
 		// Update
-		map.data[data_cell] = char(inv_log_odd(occupied_L + prev_L - initial_L));
+		map.data[data_cell] = char(inv_log_odd(occupied_L + prev_L));
 	}
 
 	for (int intI = 0; intI < length_empty; intI++)
@@ -81,14 +81,14 @@ void occupancy_update_callback(const lab2_msgs::occupancy_update& msg)
 		{
 			data_cell = i*MAP_WIDTH + j;
 
-			if (map.data[data_cell] == -1)
+			if (map.data[data_cell] == 50)
 				prev_L = initial_L;
 			else
 				prev_L = log_odd(map.data[data_cell]);
 		}
 
 		// Update
-		map.data[data_cell] = char(inv_log_odd(empty_L + prev_L - initial_L));
+		map.data[data_cell] = char(inv_log_odd(empty_L + prev_L));
 	}
 }
 
@@ -118,8 +118,8 @@ int main(int argc, char **argv)
 	map_meta_data.resolution = MAP_RESOLUTION; // [m/cell]
 	map_meta_data.width = MAP_WIDTH; // [cells]
 	map_meta_data.height = MAP_HEIGHT; // [cells]
-	map_meta_data.origin.position.x = 0; // Position the grid at -5 [m]
-	map_meta_data.origin.position.y = 0; // Position the grid at -5 [m]
+	map_meta_data.origin.position.x = -MAP_SIDE_LENGTH/2; // Position the grid at -5 [m]
+	map_meta_data.origin.position.y = -MAP_SIDE_LENGTH/2; // Position the grid at -5 [m]
 
 	// Initalize the map
 	std::vector<signed char> map_data (MAP_SIZE, 50);
