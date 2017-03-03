@@ -29,6 +29,8 @@ int outer_loop_count = 3;
 float grad_alpha = 0.001;
 float grad_beta = 0.001;
 float corr_test_skip = 1;
+float decay_const = 0.99;
+float timeout = 1.0;
 
 bool new_params = false;
 void callback(icp::ICPConfig& config, uint32_t level) {
@@ -42,6 +44,8 @@ void callback(icp::ICPConfig& config, uint32_t level) {
   grad_alpha = config.grad_alpha;
   grad_beta = config.grad_beta;
   corr_test_skip = config.corr_test_skip;
+  decay_const = config.decay_const;
+  timeout = config.timeout;
   new_params = true;
 }
 
@@ -125,7 +129,7 @@ trans GetPointGradient(float x1, float y1, float x2, float y2, trans curr)
   return grad;
 }
 
-trans GetFullGradient(std::vector<geometry_msgs::Point32> cloud1, std::vector<geometry_msgs::Point32> cloud2, std::vector<unsigned int> corr, trans t)
+trans GetFullGradient(std::vector<geometry_msgs::Point32> cloud1, std::vector<geometry_msgs::Point32> cloud2, std::vector<unsigned int> corr, trans t, double alpha)
 {
 
   trans grad;
@@ -143,9 +147,9 @@ trans GetFullGradient(std::vector<geometry_msgs::Point32> cloud1, std::vector<ge
 
     //ROS_INFO_STREAM("Part Grad: " << t_new.tx << " " << t_new.ty << " " << t_new.theta);
 
-    grad.tx = grad.tx + t_new.tx*grad_alpha;
-    grad.ty = grad.ty + t_new.ty*grad_alpha;
-    grad.theta = grad.theta + t_new.theta*grad_alpha;
+    grad.tx = grad.tx + t_new.tx*alpha;
+    grad.ty = grad.ty + t_new.ty*alpha;
+    grad.theta = grad.theta + t_new.theta*alpha;
   }
 
   grad.tx = grad.tx / test_scan_num;
@@ -208,11 +212,15 @@ trans ICP(sensor_msgs::PointCloud* c1, sensor_msgs::PointCloud* c2, sensor_msgs:
   t_init.ty = 0;
   t_init.theta = 0;
 
+  ros::Time start = ros::Time::now();
+
+  double use_alpha = grad_alpha;
+
   for(int i = 0; i < outer_loop_count; i++)
   {
     std::vector<unsigned int> corr = GetCorrespondances((*c1).points, (*c2).points);
 
-    trans grad = GetFullGradient((*c1).points, (*c2).points, corr, t_init);
+    trans grad = GetFullGradient((*c1).points, (*c2).points, corr, t_init, use_alpha);
 
     ROS_INFO_STREAM("Full Grad: " << grad.tx << " " << grad.ty << " " << grad.theta);
 
@@ -227,10 +235,16 @@ trans ICP(sensor_msgs::PointCloud* c1, sensor_msgs::PointCloud* c2, sensor_msgs:
     t_init.ty = t_init.ty - grad.ty; 
     t_init.theta = t_init.theta - grad.theta;
 
-    sleep(0.5);
-  }
+    use_alpha = use_alpha * decay_const; // Slowly decay alpha
 
-  sleep(0.5);
+    ros::Time end = ros::Time::now();
+    double time = (end - start).toSec();
+    if(time > timeout && timeout > 0.001)
+    {
+      break; // Break if timed out
+    }
+
+  }
   return t_init;
 }
 
