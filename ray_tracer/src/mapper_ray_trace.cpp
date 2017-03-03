@@ -35,6 +35,9 @@ geometry_msgs::Pose _robot_pose;
 sensor_msgs::LaserScan _laser_scan;
 
 
+bool gotMapMetaData = false;
+bool gotNewLaserScan = false;
+
 // Outputs an array of unfilled cell coordinates (normalized to occupancy grid index format)
 //Bresenham line algorithm (pass empty vectors)
 // Usage: (x0, y0) is the first point and (x1, y1) is the second point. The calculated
@@ -100,15 +103,16 @@ Point robot_pose_to_norm_position(geometry_msgs::Pose &robot_pose, nav_msgs::Map
 
 float robot_pose_to_yaw(geometry_msgs::Pose &robot_pose) {
 	geometry_msgs::Quaternion robot_quat = robot_pose.orientation;
-	// ROS_INFO("quat: %f, %f, %f, %f", robot_quat.x, robot_quat.y, robot_quat.z, robot_quat.w);
 	double yaw = tf::getYaw(robot_quat);
-	// ROS_INFO("yaw: %f", yaw);
 	return yaw;
 }
 
 
 // conversion to normalized range for occupancy grid
 float range_to_norm_range(float range, float map_resolution) {
+	if (isnan(range)) {
+		return -1;
+	} 
 	float norm_range = range / map_resolution;
 	return norm_range;
 }
@@ -127,9 +131,16 @@ void laser_scan_to_points(Point robot_norm_position, float yaw, sensor_msgs::Las
 		true_laser_angle = curr_angle + yaw;
 		curr_range = range_to_norm_range(ranges[i], map_data.resolution);
 
+		// ROS_INFO("curr_angle: %f", curr_angle);
+	 //    ROS_INFO(">>>true_laser_angle: %f", true_laser_angle);
+	 //    ROS_INFO(">>>>>>curr_range: %f", curr_range);
+
+		if (curr_range < 0) {
+			continue;
+		}
 
 		float laser_add_x = curr_range * cos(true_laser_angle);
-		float laser_add_y = robot_norm_position.y + curr_range * sin(true_laser_angle);
+		float laser_add_y = curr_range * sin(true_laser_angle);
 
 		int laser_x = robot_norm_position.x + laser_add_x;
 		int laser_y = robot_norm_position.y + laser_add_y;
@@ -176,7 +187,7 @@ void map_details_callback(const nav_msgs::MapMetaData& map_details) {
 
 	_map_data = map_details;
 	// ROS_INFO("MAAAP: res: %f, w: %d", _map_data.resolution, _map_data.width);
-
+	gotMapMetaData = true;
 }
 
 
@@ -191,6 +202,7 @@ void scan_callback(const sensor_msgs::LaserScan& scan) {
 
 	_laser_scan = scan;
 	// ROS_INFO("HAHAA: min%f, max%f", _laser_scan.range_min, _laser_scan.range_max);
+	gotNewLaserScan = true;
 }
 
 
@@ -222,6 +234,10 @@ int main(int argc, char **argv) {
      	ros::spinOnce(); 
 
 
+     	if (!gotMapMetaData || !gotNewLaserScan) {
+     		continue;
+     	}
+     	gotNewLaserScan = false;
 
 
 		// *******************************

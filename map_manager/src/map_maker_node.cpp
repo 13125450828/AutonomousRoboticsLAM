@@ -58,7 +58,7 @@ void occupancy_update_callback(const lab2_msgs::occupancy_update& msg)
 		i = msg.filled[intI].row;
 		j = msg.filled[intI].col;
 
-		if (i>=0) || (j>=0)
+		if (i>=0 || j>=0)
 		{
 			data_cell = i*MAP_WIDTH + j;
 
@@ -77,7 +77,7 @@ void occupancy_update_callback(const lab2_msgs::occupancy_update& msg)
 		i = msg.unfilled[intI].row;
 		j = msg.unfilled[intI].col;
 		
-		if (i>=0) || (j>=0)
+		if (i>=0 || j>=0)
 		{
 			data_cell = i*MAP_WIDTH + j;
 
@@ -118,8 +118,8 @@ int main(int argc, char **argv)
 	map_meta_data.resolution = MAP_RESOLUTION; // [m/cell]
 	map_meta_data.width = MAP_WIDTH; // [cells]
 	map_meta_data.height = MAP_HEIGHT; // [cells]
-	map_meta_data.origin.position.x = -MAP_SIDE_LENGTH/2; // Position the grid at -5 [m]
-	map_meta_data.origin.position.y = -MAP_SIDE_LENGTH/2; // Position the grid at -5 [m]
+	map_meta_data.origin.position.x = 0; // Position the grid at -5 [m]
+	map_meta_data.origin.position.y = 0; // Position the grid at -5 [m]
 
 	// Initalize the map
 	std::vector<signed char> map_data (MAP_SIZE, 50);
@@ -127,6 +127,7 @@ int main(int argc, char **argv)
 	//Setting to map struct
 	map.info = map_meta_data;
 	map.data = map_data;
+	map.header.frame_id = "/odom";
 
 	//Set the loop rate
 	ros::Rate loop_rate(10);    // 20Hz update rate
