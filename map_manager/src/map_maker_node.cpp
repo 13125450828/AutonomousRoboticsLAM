@@ -88,7 +88,7 @@ void occupancy_update_callback(const lab2_msgs::occupancy_update& msg)
 int main(int argc, char **argv)
 {
 	//Initialize the ROS framework
-	ros::init(argc,argv,"main_control");
+	ros::init(argc,argv,"map_maker");
 	ros::NodeHandle n;
 
 	//Subscribe to the desired topics and assign callbacks
@@ -114,10 +114,6 @@ int main(int argc, char **argv)
 
 	// Initalize the map
 	std::vector<signed char> map_data (MAP_SIZE, 50);
-
-	for (int i=30; i<130; i++) {
-		map_data[i] = 90;
-	}
 	
 	//Setting to map struct
 	map.info = map_meta_data;
@@ -141,7 +137,7 @@ int main(int argc, char **argv)
 			// Publish the map once every 10 cycles
 			iCount = 0;	
 			map_pub.publish(map);
-			ROS_DEBUG("Published the Map");
+			ROS_INFO("Published the Map");
 		}
 		else iCount ++;
 	}

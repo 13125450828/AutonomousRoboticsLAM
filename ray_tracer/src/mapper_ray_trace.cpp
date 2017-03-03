@@ -4,6 +4,7 @@
 #include <lab2_msgs/index.h>
 #include <nav_msgs/MapMetaData.h>
 #include <geometry_msgs/Pose.h>
+#include <geometry_msgs/PoseStamped.h>
 #include <sensor_msgs/LaserScan.h>
 #include <set>
 #include <tf/transform_datatypes.h>
@@ -99,7 +100,9 @@ Point robot_pose_to_norm_position(geometry_msgs::Pose &robot_pose, nav_msgs::Map
 
 float robot_pose_to_yaw(geometry_msgs::Pose &robot_pose) {
 	geometry_msgs::Quaternion robot_quat = robot_pose.orientation;
+	// ROS_INFO("quat: %f, %f, %f, %f", robot_quat.x, robot_quat.y, robot_quat.z, robot_quat.w);
 	double yaw = tf::getYaw(robot_quat);
+	// ROS_INFO("yaw: %f", yaw);
 	return yaw;
 }
 
@@ -118,6 +121,7 @@ void laser_scan_to_points(Point robot_norm_position, float yaw, sensor_msgs::Las
 	float curr_angle = scan.angle_min;
 	float true_laser_angle = curr_angle + yaw;
 	float curr_range;
+
 	for (int i=0; i<ranges.size(); ++i) {
 		curr_angle += scan.angle_increment;
 		true_laser_angle = curr_angle + yaw;
@@ -130,7 +134,7 @@ void laser_scan_to_points(Point robot_norm_position, float yaw, sensor_msgs::Las
 		int laser_x = robot_norm_position.x + laser_add_x;
 		int laser_y = robot_norm_position.y + laser_add_y;
 		Point curr_laser_point = {.x= laser_x, .y= laser_y };
-		norm_pts[i] = curr_laser_point;
+		norm_pts.push_back(curr_laser_point);
 	}
 
 	return;
@@ -168,24 +172,25 @@ void points_to_indices(std::vector<Point> points, std::vector<lab2_msgs::index> 
 // ******************
 // Callback functions
 
-void map_details_callback(const nav_msgs::MapMetaData::ConstPtr& map_details) {
+void map_details_callback(const nav_msgs::MapMetaData& map_details) {
 
-	_map_data = *map_details;
-
-}
-
-
-void refined_pose_callback(const geometry_msgs::Pose::ConstPtr& refined_pose) {
-
-	_robot_pose = *refined_pose;
+	_map_data = map_details;
+	// ROS_INFO("MAAAP: res: %f, w: %d", _map_data.resolution, _map_data.width);
 
 }
 
 
-void scan_callback(const sensor_msgs::LaserScan::ConstPtr& scan) {
+void refined_pose_callback(const geometry_msgs::PoseStamped& refined_pose) {
 
-	_laser_scan = *scan;
+	_robot_pose = refined_pose.pose;
 
+}
+
+
+void scan_callback(const sensor_msgs::LaserScan& scan) {
+
+	_laser_scan = scan;
+	// ROS_INFO("HAHAA: min%f, max%f", _laser_scan.range_min, _laser_scan.range_max);
 }
 
 
@@ -201,9 +206,9 @@ int main(int argc, char **argv) {
 	// Note: 2nd param is buffer size
 	ros::Publisher raytrace_output = n.advertise<lab2_msgs::occupancy_update>("/raytrace_output", 10);
 
-	ros::Subscriber map_details_sub = n.subscribe<nav_msgs::MapMetaData>("/map_meta_data", 10, map_details_callback);
-	ros::Subscriber refined_pose_sub = n.subscribe<geometry_msgs::Pose>("/indoor_pos", 10, refined_pose_callback);
-	ros::Subscriber scan_sub = n.subscribe<sensor_msgs::LaserScan>("/scan", 10, scan_callback);
+	ros::Subscriber map_details_sub = n.subscribe("/map_meta_data", 10, map_details_callback);
+	ros::Subscriber refined_pose_sub = n.subscribe("/estimatedpose", 10, refined_pose_callback);
+	ros::Subscriber scan_sub = n.subscribe("/scan", 10, scan_callback);
 
 
 	Point min_xy_corner = {.x=-2, .y=-2};
@@ -212,6 +217,12 @@ int main(int argc, char **argv) {
 	ros::Rate loop_rate(10);
 
 	while (ros::ok()) {
+
+		loop_rate.sleep(); //Maintain the loop rate
+     	ros::spinOnce(); 
+
+
+
 
 		// *******************************
 		// Conversion
@@ -229,7 +240,7 @@ int main(int argc, char **argv) {
 		// Get filled cells
 		std::vector<lab2_msgs::index> filled_cells;
 		get_filled_cells(laser_pts, filled_cells);
-
+		
 
 		// *******************************
 		// Getting unfilled_cells
@@ -247,6 +258,7 @@ int main(int argc, char **argv) {
 			lab2_msgs::index curr_index;
 			curr_index.row = int(curr_pt.x);
 			curr_index.col = int(curr_pt.y);
+
 			unfilled_cells.push_back(curr_index);
 		}
 

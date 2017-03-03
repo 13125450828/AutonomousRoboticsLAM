@@ -107,13 +107,6 @@ float normal_pdf (float x, float m, float s){
     return inv_sqrt_2pi/s*std::exp(-0.5f*a*a);
 }
 
-//Callback function for the map
-void map_callback(const nav_msgs::OccupancyGrid& msg)
-{
-    //This function is called when a new map is received
-    
-    //you probably want to save the map into a form which is easy to work with
-}
 
 //Subscribe to the desired topics and assign callbacks
 ros::Subscriber pose_sub;
@@ -193,13 +186,12 @@ void drawPoint(int k, double x, double y, double z)
 int main(int argc, char **argv)
 {
 	//Initialize the ROS framework
-    ros::init(argc,argv,"main_control");
-    ROS_INFO("Starting Main Node");
+    ros::init(argc,argv,"particle_filter");
+    //ROS_INFO("Starting Main Node");
     ros::NodeHandle n;
 
     //Subscribe to the desired topics and assign callbacks
     pose_sub = n.subscribe("/gazebo/model_states", 1, pose_callback);
-    map_sub = n.subscribe("/map", 1, map_callback);
     odom_sub = n.subscribe("/odom",1,odometry_calback);
     //ros::subscriber pose_sub = n.subscribe("/indoor_pos", 1, )
     ros::Publisher velocity_publisher = n.advertise<geometry_msgs::Twist>("/cmd_vel_mux/input/navi", 1);
@@ -247,7 +239,7 @@ int main(int argc, char **argv)
     int randfactor = 0.1;
     int randMin = 0;
 
-    ROS_INFO("Populating particles uniformally");
+    //ROS_INFO("Populating particles uniformally");
     //populate particles uniformally 
     for (int i = 0; i < NUM_PARTICLES; i++){
         particleMatrix (0,i) = (double) randfactor*rand()/RAND_MAX;
@@ -270,13 +262,13 @@ int main(int argc, char **argv)
     path.header.frame_id = "/odom";
     final_pos.header.frame_id = "/odom";
 
-    ROS_INFO("Marker Object Setup");
+    //ROS_INFO("Marker Object Setup");
 
     int loopcounter = 0; //to allow for multirate (odom + IPS)
 
     while (ros::ok())
     {
-        //ROS_INFO("Starting loop");
+        ////ROS_INFO("Starting loop");
 
     	loop_rate.sleep(); //Maintain the loop rate
     	ros::spinOnce();   //Check for new meanssages
@@ -286,7 +278,7 @@ int main(int argc, char **argv)
         X_input[1]= lin_v;
         X_input[2] = ang_v;
 
-        //ROS_INFO("Registering Inputs");
+        ////ROS_INFO("Registering Inputs");
         //if (motion == true)
         if (true) //currently waitng for motion is not working well 
         {
@@ -315,8 +307,8 @@ int main(int argc, char **argv)
                 //Y_matrix[1] = Y_matrix[1] + dt*sin(Y_matrix[2])*X_input[1];
                 //Y_matrix[2] = Y_matrix[2] + dt*X_input[2];
                 //Y_matrix[2] = atan2(sin(Y_matrix[2]), cos(Y_matrix[2]));
-                ROS_INFO("IPS X: %f Y: %f Yaw: %f", ips_x, ips_y,ips_yaw);
-                ROS_INFO("Inputs X: %f Y: %f Yaw: %f", X_input[0], X_input[1],X_input[2]);
+                //ROS_INFO("IPS X: %f Y: %f Yaw: %f", ips_x, ips_y,ips_yaw);
+                //ROS_INFO("Inputs X: %f Y: %f Yaw: %f", X_input[0], X_input[1],X_input[2]);
 
                 double sum_x=0; //used for averaging particles
                 double sum_y=0; //used for averaging particles 
@@ -330,7 +322,7 @@ int main(int argc, char **argv)
                 particleMatrix(1,i) = particleMatrix(1,i) + dt*sin(particleMatrix(2,i))*X_input[1] + sampleNormdist(0,Q_matrix[1]); //y update 
                 particleMatrix(2,i) = particleMatrix(2,i) + dt*X_input[2] + sampleNormdist(0,Q_matrix[2]);; //TODO add noise to yaw update 
                 //particleMatrix(2,i) = atan2(sin(particleMatrix(2,i)),cos(particleMatrix(2,i))); //Convert YAW to a bearing 
-                ROS_INFO("Angular vel: %f", X_input[2]);
+                //ROS_INFO("Angular vel: %f", X_input[2]);
                 //Calculate individual weights
                 
                 Weights[1]= normal_pdf(Y_matrix[0], particleMatrix(0,i),0.01);
@@ -343,22 +335,22 @@ int main(int argc, char **argv)
                 sum_y = sum_y + particleMatrix(1,i);
                 sum_yaw = sum_yaw + particleMatrix(1,i);
                 
-                //ROS_INFO("X PDF Params: %f --- %f --- %f",Y_matrix[0], particleMatrix(0,i),0.01);
-                //ROS_INFO("Y PDF Params: %f --- %f --- %f",Y_matrix[1], particleMatrix(1,i),0.01);
-                ROS_INFO("Yaw PDF Params: %f --- %f --- %f",Y_matrix[2], particleMatrix(2,i),0.1);
+                ////ROS_INFO("X PDF Params: %f --- %f --- %f",Y_matrix[0], particleMatrix(0,i),0.01);
+                ////ROS_INFO("Y PDF Params: %f --- %f --- %f",Y_matrix[1], particleMatrix(1,i),0.01);
+                //ROS_INFO("Yaw PDF Params: %f --- %f --- %f",Y_matrix[2], particleMatrix(2,i),0.1);
                
                 //Combine and store as 3rd element in particleMatrix
                 //particleMatrix(3,i) = Weights[1]*Weights[2]*Weights[3];
                 //not doing yaw weights right now cuz it was giving me fuckery  
                 //particleMatrix(3,i) = 1/(Q*Q*2*M_PI)*exp(-(pow(Y_matrix[0]-particleMatrix(0,i),2)/(2*Q*Q)+pow(Y_matrix[1]-particleMatrix(1,i),2)/(2*Q*Q)));
                 particleMatrix(3,i) = Weights[1]*Weights[2]*Weights[3];
-                // ROS_INFO("Weights: %f --- %f --- %f ---- %f",Weights[1],Weights[2],Weights[3], particleMatrix(3,i));
+                // //ROS_INFO("Weights: %f --- %f --- %f ---- %f",Weights[1],Weights[2],Weights[3], particleMatrix(3,i));
                 //Compute a cumulative weight for resampling the particles later on 
                 if (i==0) 
                     CumSum[i] = particleMatrix(3,i);
                 else{
                     CumSum[i] = CumSum[i-1] + particleMatrix(3,i);
-                   // ROS_INFO("CUMSUM[i] : %f",CumSum[i]);
+                   // //ROS_INFO("CUMSUM[i] : %f",CumSum[i]);
                 }
 
                 //Draw the particle 
@@ -367,7 +359,7 @@ int main(int argc, char **argv)
                 //points.points.push_back(marker_point);
                 drawPoint(i, marker_point.x, marker_point.y, 0);
             }
-            //ROS_INFO("Weights: %f ",CumSum[NUM_PARTICLES-2]);
+            ////ROS_INFO("Weights: %f ",CumSum[NUM_PARTICLES-2]);
 
             //Create our path based on averaging our particles
             final_pos.pose.position.x = sum_x / NUM_PARTICLES;
@@ -387,11 +379,11 @@ int main(int argc, char **argv)
                 for (int j = 0; j < NUM_PARTICLES; j++)
                 {
                     seed = CumSum[NUM_PARTICLES-1]*rand()/RAND_MAX;
-                    //ROS_INFO("SEED: %f CUMSUM[NUM_PARTICLES-1]: %f",seed,CumSum[NUM_PARTICLES-1]);
+                    ////ROS_INFO("SEED: %f CUMSUM[NUM_PARTICLES-1]: %f",seed,CumSum[NUM_PARTICLES-1]);
 
                     // Determine Particles Greater than the Seed
                     for (int i = 0; i< NUM_PARTICLES; i++){
-                        //ROS_INFO("CUMSUM[i]: %f",CumSum[i]);
+                        ////ROS_INFO("CUMSUM[i]: %f",CumSum[i]);
                         if (CumSum[i] >= seed)
                         {
                             tempindex = i;
