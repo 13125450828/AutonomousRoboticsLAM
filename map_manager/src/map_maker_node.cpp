@@ -23,8 +23,8 @@ const int MAP_WIDTH = uint(MAP_SIDE_LENGTH / MAP_RESOLUTION);
 const int MAP_HEIGHT = MAP_WIDTH;
 const int MAP_SIZE = MAP_WIDTH * MAP_HEIGHT;
 
-const double empty_L = log(0.01 / (1-0.01));
-const double occupied_L = log(0.99 / (1-0.99));
+const double empty_L = log(0.499999 / (1-0.499999));
+const double occupied_L = log(0.999999 / (1-0.999999));
 const double initial_L = log(0.5 / (1-0.5)); 
 
 // Initialize the map
@@ -52,32 +52,15 @@ void occupancy_update_callback(const lab2_msgs::occupancy_update& msg)
 
 	int length_occupied = msg.filled.size();
 	int length_empty = msg.unfilled.size();
+	char temp;
 
-	for (int intI = 0; intI < length_occupied; intI++)
-	{
-		i = MAP_WIDTH - msg.filled[intI].row;
-		j = MAP_HEIGHT - msg.filled[intI].col;
-
-		if (i>=0 || j>=0)
-		{
-			data_cell = i*MAP_WIDTH + j;
-
-			if (map.data[data_cell] == 50)
-				prev_L = initial_L;
-			else
-				prev_L = log_odd(map.data[data_cell]);
-		}
-
-		// Update
-		map.data[data_cell] = char(inv_log_odd(occupied_L + prev_L));
-	}
 
 	for (int intI = 0; intI < length_empty; intI++)
 	{
-		i = MAP_WIDTH - msg.unfilled[intI].row;
-		j = MAP_HEIGHT - msg.unfilled[intI].col;
+		j = MAP_WIDTH + msg.unfilled[intI].row -1;
+		i = MAP_HEIGHT + msg.unfilled[intI].col -1;
 		
-		if (i>=0 || j>=0)
+		if (i>=0 && j>=0  && i < MAP_WIDTH && j<MAP_HEIGHT)
 		{
 			data_cell = i*MAP_WIDTH + j;
 
@@ -88,7 +71,30 @@ void occupancy_update_callback(const lab2_msgs::occupancy_update& msg)
 		}
 
 		// Update
-		map.data[data_cell] = char(inv_log_odd(empty_L + prev_L));
+		temp = char(inv_log_odd(empty_L + prev_L + initial_L));
+		if (temp < 100)
+			map.data[data_cell] = temp;
+	}
+
+	for (int intI = 0; intI < length_occupied; intI++)
+	{
+		j = MAP_WIDTH + msg.filled[intI].row -1;
+		i = MAP_HEIGHT + msg.filled[intI].col -1;
+
+		if (i>=0 && j>=0 && i < MAP_WIDTH && j < MAP_HEIGHT)
+		{
+			data_cell = i*MAP_WIDTH + j;
+
+			if (map.data[data_cell] == 50)
+				prev_L = initial_L;
+			else
+				prev_L = log_odd(map.data[data_cell]);
+		}
+
+		// Update
+		temp = 99;//char(inv_log_odd(occupied_L + prev_L + initial_L));
+		if (temp < 100)
+			map.data[data_cell] = temp;
 	}
 }
 

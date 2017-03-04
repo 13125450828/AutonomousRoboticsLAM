@@ -26,6 +26,19 @@ struct Point {
 	}
 }; 
 
+struct PointInt {
+	int x;
+	int y;
+
+	friend bool operator<(const PointInt &curr, const PointInt &other) {
+		if (curr.x != other.x) {
+			return curr.x < other.x;
+		} else {
+			return curr.y < other.y;
+		}
+	}
+};
+
 // Pre-declarations
 void show_filled_laser_points(Point visualization_point);
 
@@ -43,8 +56,12 @@ sensor_msgs::LaserScan _laser_scan;
 Point min_xy_corner = {.x=-5, .y=-5};
 Point max_xy_corner = {.x=5, .y=5};
 
+float map_resolution_offset =  0.00000000150;
+
 bool gotMapMetaData = false;
 bool gotNewLaserScan = false;
+
+float laser_scan_range = 5.8f;
 
 //visualization
 visualization_msgs::Marker marker_filled_points;
@@ -56,7 +73,7 @@ visualization_msgs::Marker marker_unfilled_points;
 // Usage: (x0, y0) is the first point and (x1, y1) is the second point. The calculated
 //        points (x, y) are stored in the x and y vector. x and y should be empty 
 //	  vectors of integers and shold be defined where this function is called from.
-void bresenham(Point pt1, Point pt2, std::set<Point>& cells) {
+void bresenham(Point pt1, Point pt2, std::set<PointInt>& cells) {
 
 	int x0 = int(round(pt1.x));
 	int x1 = int(round(pt2.x));
@@ -82,9 +99,14 @@ void bresenham(Point pt1, Point pt2, std::set<Point>& cells) {
     int inc2 = d - dx;
 
     Point cell0 = {.x = x0, .y = y0 };
-    cells.insert(cell0);
+    PointInt cell0Int = {.x = int(round(cell0.x)), .y= int(round(cell0.y))};
+    cells.insert(cell0Int);
 
-    while (x0 != x1 || y0 != y1) {
+    // int signum_dx2 = sgn(dx2);
+    // int signum_dy2 = sgn(dy2);
+
+    // while (x0 != x1 || y0 != y1) {
+    while (abs(x1-x0) > 1 || abs(y1-y0) > 1) {
         if (s) y0+=sgn(dy2); else x0+=sgn(dx2);
         if (d < 0) d += inc1;
         else {
@@ -93,18 +115,20 @@ void bresenham(Point pt1, Point pt2, std::set<Point>& cells) {
         }
 
         //Add point to vector
-        Point new_cell = {.x = x0, .y = y0 };
 
-        if (x0 != x1 || y0 != y1) {
-        	cells.insert(new_cell);
-        }
+        Point new_cell = {.x = x0, .y = y0 };
+        PointInt new_cellInt = {.x = int(round(new_cell.x)), .y= int(round(new_cell.y))};
+        cells.insert(new_cellInt);
     	
     }
 }
 
 
 // Outputs the normalized position for occupancy grid
-Point robot_pose_to_norm_position(geometry_msgs::Pose &robot_pose, nav_msgs::MapMetaData &map_data, Point min_xy_corner, Point max_xy_corner) {
+Point robot_pose_to_norm_position() {
+
+	geometry_msgs::Pose &robot_pose = _robot_pose;
+	nav_msgs::MapMetaData &map_data = _map_data;
 
 	Point robot_position = {.x=robot_pose.position.x, .y=robot_pose.position.y};
 
@@ -152,11 +176,20 @@ Point norm_point_to_point(Point norm_point, float map_resolution, Point min_xy_c
 
 
 // conversion to normalized range for occupancy grid
-float range_to_norm_range(float range, float map_resolution) {
+float range_to_norm_range(float range, nav_msgs::MapMetaData map_meta_data, sensor_msgs::LaserScan &scan, bool farFromObject) {
+	float using_range;
 	if (isnan(range)) {
-		return -1;
-	} 
-	float norm_range = range / map_resolution;
+		if(farFromObject) {
+			using_range = laser_scan_range;
+		} else {
+			return -1;
+		}	
+		
+	} else {
+		using_range = range;
+	}
+
+	float norm_range = using_range / map_meta_data.resolution;
 	return norm_range;
 }
 
@@ -169,10 +202,24 @@ void laser_scan_to_points(Point robot_norm_position, float robot_yaw, sensor_msg
 	float true_laser_angle = curr_angle + robot_yaw;
 	float curr_range;
 
+	bool farFromObject = true;
+	int contiguousNaNs = 0;
 	for (int i=0; i<ranges.size(); ++i) {
 		curr_angle += scan.angle_increment;
 		true_laser_angle = curr_angle + robot_yaw;
-		curr_range = range_to_norm_range(ranges[i], map_data.resolution);
+
+		if (isnan(ranges[i])) {
+			contiguousNaNs++;
+		} else {
+			contiguousNaNs = 0;
+		}
+
+		if (contiguousNaNs > 5) {
+			farFromObject = true;
+		} else {
+			farFromObject = false;
+		}
+		curr_range = range_to_norm_range(ranges[i], map_data, scan, farFromObject);
 
 		if (curr_range < 0) {
 			continue;
@@ -249,8 +296,20 @@ void get_filled_cells(std::vector<Point> &norm_pts, std::vector<lab2_msgs::index
 
 	for (int i=0; i<norm_pts.size(); i++) {
 		Point scan_point = norm_pts[i];
-		lab2_msgs::index curr_index;
 
+		Point robot_pos = robot_pose_to_norm_position();
+
+		float x = scan_point.x;
+		float y = scan_point.y;
+
+		float distance_from_robot_to_point = sqrt(pow(robot_pos.x - x,2) + pow(robot_pos.y - y,2));
+
+		if (distance_from_robot_to_point >= (laser_scan_range/1.1 /_map_data.resolution)) {
+
+			continue;
+		}
+
+		lab2_msgs::index curr_index;
 		curr_index.row = int(round(scan_point.x));
 		curr_index.col = int(round(scan_point.y));
 		filled_cells.push_back(curr_index);
@@ -279,15 +338,15 @@ void points_to_indices(std::vector<Point> points, std::vector<lab2_msgs::index> 
 void map_details_callback(const nav_msgs::MapMetaData& map_details) {
 
 	_map_data = map_details;
+	_map_data.resolution = _map_data.resolution - map_resolution_offset;
 
 	gotMapMetaData = true;
 }
 
-                                                    //Stamped
-void refined_pose_callback(const geometry_msgs::Pose& refined_pose) {
+                                                   
+void refined_pose_callback(const geometry_msgs::PoseStamped& refined_pose) {
 
-	// _robot_pose = refined_pose.pose;
-	_robot_pose = refined_pose;
+	_robot_pose = refined_pose.pose;
 
 }
 
@@ -327,8 +386,9 @@ int main(int argc, char **argv) {
 	while (ros::ok()) {
 
 		loop_rate.sleep(); //Maintain the loop rate
-     	ros::spinOnce(); 
+     	ros::spinOnce();
 
+     	ROS_INFO("Published RayTrace");
 
      	if (!gotMapMetaData || !gotNewLaserScan) {
      		continue;
@@ -347,7 +407,7 @@ int main(int argc, char **argv) {
 
 		// *******************************
 		// Conversion
-		Point robot_norm_position = robot_pose_to_norm_position(_robot_pose, _map_data, min_xy_corner, max_xy_corner);
+		Point robot_norm_position = robot_pose_to_norm_position();
 
 		float robot_yaw = robot_pose_to_yaw(_robot_pose);
 
@@ -370,7 +430,7 @@ int main(int argc, char **argv) {
 
 		// *******************************
 		// Getting unfilled_cells
-		std::set<Point> unfilled_cells_set;
+		std::set<PointInt> unfilled_cells_set;
 		for (int i=0; i<laser_pts.size(); i++) {
 
 			bresenham(robot_norm_position, laser_pts[i], unfilled_cells_set);
@@ -378,19 +438,19 @@ int main(int argc, char **argv) {
 
 		//Convert set to vector for publishing
 		std::vector<lab2_msgs::index> unfilled_cells;
-		std::set<Point>::iterator it;
+		std::set<PointInt>::iterator it;
 		for (it = unfilled_cells_set.begin(); it != unfilled_cells_set.end(); ++it) {
-			Point curr_pt = *it;
+			PointInt curr_pt = *it;
 			lab2_msgs::index curr_index;
 
-			//For Ken
-			curr_index.row = int(round(curr_pt.x));
-			curr_index.col = int(round(curr_pt.y));
+			curr_index.row = curr_pt.x;
+			curr_index.col = curr_pt.y;
 
 			unfilled_cells.push_back(curr_index);
 
 			//Visualization
-			Point real_unfilled = norm_point_to_point(curr_pt, _map_data.resolution, min_xy_corner, max_xy_corner);
+			Point curr_pt_float = {.x=curr_pt.x, .y = curr_pt.y};
+			Point real_unfilled = norm_point_to_point(curr_pt_float, _map_data.resolution, min_xy_corner, max_xy_corner);
 			show_unfilled_laser_points(real_unfilled);
 		}
 
