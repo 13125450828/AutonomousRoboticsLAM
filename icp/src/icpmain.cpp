@@ -251,6 +251,10 @@ trans ICP(sensor_msgs::PointCloud* c1, sensor_msgs::PointCloud* c2, sensor_msgs:
 
 void LaserCallback(sensor_msgs::LaserScan scan)
 {
+  if (currently_processing)
+  {
+    return;
+  }
   new_scan = scan;
   got_new_scan = true;
 }
@@ -294,6 +298,8 @@ int main(int argc, char **argv) {
 
     if(got_new_scan && (!old_scan.ranges.empty() && !new_scan.ranges.empty()))
     {
+      currently_processing = true;
+
       TransformScan(&old_scan, &cloud_disp);
       TransformScan(&new_scan, &new_cloud);
 
@@ -332,6 +338,7 @@ int main(int argc, char **argv) {
       mot_pub.publish(pose_out);
 
       got_new_scan = false;
+      currently_processing = false;
     }
 
     if(!new_scan.ranges.empty())
@@ -344,15 +351,4 @@ int main(int argc, char **argv) {
   }
   
   return 0;
-}
-
-void Real()
-{
-
-}
-
-void Fake(ros::Publisher test_pub1, ros::Publisher test_pub2, ros::Publisher test_pubres)
-{
-  //ROS_INFO_STREAM("Creating Scans");
-    
 }
