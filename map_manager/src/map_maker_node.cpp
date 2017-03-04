@@ -55,8 +55,8 @@ void occupancy_update_callback(const lab2_msgs::occupancy_update& msg)
 
 	for (int intI = 0; intI < length_occupied; intI++)
 	{
-		i = msg.filled[intI].row;
-		j = msg.filled[intI].col;
+		i = MAP_WIDTH - msg.filled[intI].row;
+		j = MAP_HEIGHT - msg.filled[intI].col;
 
 		if (i>=0 || j>=0)
 		{
@@ -74,8 +74,8 @@ void occupancy_update_callback(const lab2_msgs::occupancy_update& msg)
 
 	for (int intI = 0; intI < length_empty; intI++)
 	{
-		i = msg.unfilled[intI].row;
-		j = msg.unfilled[intI].col;
+		i = MAP_WIDTH - msg.unfilled[intI].row;
+		j = MAP_HEIGHT - msg.unfilled[intI].col;
 		
 		if (i>=0 || j>=0)
 		{

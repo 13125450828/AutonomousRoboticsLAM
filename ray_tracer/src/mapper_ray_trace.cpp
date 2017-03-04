@@ -48,21 +48,25 @@ bool gotNewLaserScan = false;
 
 //visualization
 visualization_msgs::Marker marker_filled_points;
+visualization_msgs::Marker marker_unfilled_points;
+
 
 // Outputs an array of unfilled cell coordinates (normalized to occupancy grid index format)
-//Bresenham line algorithm (pass empty vectors)
+// Bresenham line algorithm (pass empty vectors)
 // Usage: (x0, y0) is the first point and (x1, y1) is the second point. The calculated
 //        points (x, y) are stored in the x and y vector. x and y should be empty 
 //	  vectors of integers and shold be defined where this function is called from.
 void bresenham(Point pt1, Point pt2, std::set<Point>& cells) {
 
-	int x0 = int(round(pt1.x));
-	int x1 = int(round(pt1.y));
-	int y0 = int(round(pt2.x));
-	int y1 = int(round(pt2.y));
+	int x0 = -int(round(pt1.x));
+	int x1 = -int(round(pt2.x));
+	int y0 = -int(round(pt1.y));
+	int y1 = -int(round(pt2.y));
 
     int dx = abs(x1 - x0);
     int dy = abs(y1 - y0);
+    ROS_INFO("laser [%d, %d]", y0, y1);
+
     int dx2 = x1 - x0;
     int dy2 = y1 - y0;
     
@@ -90,11 +94,24 @@ void bresenham(Point pt1, Point pt2, std::set<Point>& cells) {
         }
 
         //Add point to vector
-        Point new_cell = {.x = x0, .y = y0 };
+        Point new_cell = {.x = -x0, .y = -y0 };
     	cells.insert(new_cell);
+    	// ROS_INFO("unfilled [%f, %f]", new_cell.x, new_cell.y);
     }
 }
 
+
+void custom_bresenham(Point pt1, Point pt2, std::set<Point>& cells) {
+	float x0 = pt1.x;
+	float x1 = pt2.x;
+	float y0 = pt1.y;
+	float y1 = pt2.y;
+
+
+	float dx = x1 - x0;
+	float dy = y1 - y0;
+	float derr = abs(dy / dx);
+}
 
 
 // Outputs the normalized position for occupancy grid
@@ -122,15 +139,18 @@ Point robot_pose_to_norm_position(geometry_msgs::Pose &robot_pose, nav_msgs::Map
 float robot_pose_to_yaw(geometry_msgs::Pose &robot_pose) {
 	geometry_msgs::Quaternion robot_quat = robot_pose.orientation;
 	double yaw = tf::getYaw(robot_quat);
-	ROS_INFO("robot_pose_to_yaw: [%f]", yaw);
+	
 	return yaw;
 }
 
 // For visualization
 Point norm_point_to_point(Point norm_point, float map_resolution, Point min_xy_corner, Point max_xy_corner) {
 
-	float top_left_x = norm_point.x * map_resolution;
-	float top_left_y = norm_point.y * map_resolution;
+	float norm_point_x = norm_point.x;
+	float norm_point_y = norm_point.y;
+
+	float top_left_x = norm_point_x * map_resolution;
+	float top_left_y = norm_point_y * map_resolution;
 
 	// float real_y = -1 * (top_left_x - max_xy_corner.y);
 	// float real_x = -1 * (top_left_y - max_xy_corner.x);
@@ -172,9 +192,10 @@ void laser_scan_to_points(Point robot_norm_position, float robot_yaw, sensor_msg
 		float laser_add_x = curr_range * cos(true_laser_angle);
 		float laser_add_y = curr_range * sin(true_laser_angle);
 
-		int laser_x = robot_norm_position.x + laser_add_x;
-		int laser_y = robot_norm_position.y + laser_add_y;
-		Point curr_laser_point = {.x= laser_x, .y= laser_y };
+		float laser_x = robot_norm_position.x + laser_add_x;
+		float laser_y = robot_norm_position.y + laser_add_y;
+
+		Point curr_laser_point = { .x= laser_x, .y= laser_y };
 
 		norm_pts.push_back(curr_laser_point);
 
@@ -182,7 +203,6 @@ void laser_scan_to_points(Point robot_norm_position, float robot_yaw, sensor_msg
 		Point real_coord_laser_point = norm_point_to_point(curr_laser_point, map_data.resolution, min_xy_corner, max_xy_corner);
 		show_filled_laser_points(real_coord_laser_point);
 
-		ROS_INFO("robot_yaw: [%f]", robot_yaw);
 	}
 
 	return;
@@ -198,7 +218,17 @@ void show_filled_laser_points(Point visualization_point) {
 }
 
 
-void setup_visualization_marker(visualization_msgs::Marker& marker) {
+void show_unfilled_laser_points(Point visualization_point) {
+
+    geometry_msgs::Point p;
+   	p.x = visualization_point.x;
+   	p.y = visualization_point.y;
+   	p.z = 0; //not used
+   	marker_unfilled_points.points.push_back(p);
+}
+
+
+void setup_filled_visualization_marker(visualization_msgs::Marker& marker) {
 	marker_filled_points.header.frame_id = "/odom";
     marker_filled_points.ns              = "filled_laser_points";
     marker_filled_points.action = visualization_msgs::Marker::ADD;
@@ -211,6 +241,18 @@ void setup_visualization_marker(visualization_msgs::Marker& marker) {
 }
 
 
+void setup_unfilled_visualization_marker(visualization_msgs::Marker& marker) {
+	marker_unfilled_points.header.frame_id = "/odom";
+    marker_unfilled_points.ns              = "unfilled_laser_points";
+    marker_unfilled_points.action = visualization_msgs::Marker::ADD;
+    marker_unfilled_points.id = 1;
+    marker_unfilled_points.type = visualization_msgs::Marker::POINTS;
+    marker_unfilled_points.scale.x = 0.1;
+    marker_unfilled_points.scale.y = 0.1;
+    marker_unfilled_points.color.g = 1.0f;
+    marker_unfilled_points.color.a = 1;
+}
+
 // Get all filled points for publishing
 // input: normalized float points from laser scan
 // output: integer points for publishing
@@ -219,6 +261,7 @@ void get_filled_cells(std::vector<Point> &norm_pts, std::vector<lab2_msgs::index
 	for (int i=0; i<norm_pts.size(); i++) {
 		Point scan_point = norm_pts[i];
 		lab2_msgs::index curr_index;
+
 		curr_index.row = int(round(scan_point.x));
 		curr_index.col = int(round(scan_point.y));
 		filled_cells.push_back(curr_index);
@@ -226,7 +269,6 @@ void get_filled_cells(std::vector<Point> &norm_pts, std::vector<lab2_msgs::index
 
 	return;
 }
-
 
 
 // Utility Functions
@@ -264,7 +306,6 @@ void refined_pose_callback(const geometry_msgs::Pose& refined_pose) {
 void scan_callback(const sensor_msgs::LaserScan& scan) {
 
 	_laser_scan = scan;
-	// ROS_INFO("HAHAA: min%f, max%f", _laser_scan.range_min, _laser_scan.range_max);
 	gotNewLaserScan = true;
 }
 
@@ -287,7 +328,9 @@ int main(int argc, char **argv) {
 	ros::Subscriber scan_sub = n.subscribe("/scan", 10, scan_callback);
 
 	//Visualization
+	ros::Publisher unfilled_points_pub = n.advertise<visualization_msgs::Marker>("unfilled_laser_points", 1, true);
 	ros::Publisher filled_points_pub = n.advertise<visualization_msgs::Marker>("filled_laser_points", 1, true);
+	
 
 
 	ros::Rate loop_rate(10);
@@ -307,8 +350,11 @@ int main(int argc, char **argv) {
      	//RESETTING VARIABLES
      	visualization_msgs::Marker empty_marker_struct;
      	marker_filled_points = empty_marker_struct;
-     	setup_visualization_marker(marker_filled_points);
+     	setup_filled_visualization_marker(marker_filled_points);
 
+     	visualization_msgs::Marker empty_marker_struct2;
+     	marker_unfilled_points = empty_marker_struct2;
+     	setup_unfilled_visualization_marker(marker_unfilled_points);
 
 		// *******************************
 		// Conversion
@@ -325,7 +371,12 @@ int main(int argc, char **argv) {
 		// *******************************
 		// Get filled cells
 		std::vector<lab2_msgs::index> filled_cells;
+		std::vector<lab2_msgs::index> filled_cells_for_visualization;
 		get_filled_cells(laser_pts, filled_cells);
+
+
+
+		// ROS_INFO("robot[%f,%f] --- laser_pts[0]=[%f,%f]", robot_norm_position.x, robot_norm_position.y, laser_pts[0].x, laser_pts[0].y);
 		
 
 		// *******************************
@@ -342,10 +393,16 @@ int main(int argc, char **argv) {
 		for (it = unfilled_cells_set.begin(); it != unfilled_cells_set.end(); ++it) {
 			Point curr_pt = *it;
 			lab2_msgs::index curr_index;
+
+			//For Ken
 			curr_index.row = int(round(curr_pt.x));
 			curr_index.col = int(round(curr_pt.y));
 
 			unfilled_cells.push_back(curr_index);
+
+			//Visualization
+			Point real_unfilled = norm_point_to_point(curr_pt, _map_data.resolution, min_xy_corner, max_xy_corner);
+			show_unfilled_laser_points(real_unfilled);
 		}
 
 		// *******************************
@@ -359,6 +416,7 @@ int main(int argc, char **argv) {
 
 		//visualization publish
 		filled_points_pub.publish(marker_filled_points);
+		unfilled_points_pub.publish(marker_unfilled_points);
 
 	}
 
