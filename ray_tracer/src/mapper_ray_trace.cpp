@@ -58,10 +58,10 @@ visualization_msgs::Marker marker_unfilled_points;
 //	  vectors of integers and shold be defined where this function is called from.
 void bresenham(Point pt1, Point pt2, std::set<Point>& cells) {
 
-	int x0 = -int(round(pt1.x));
-	int x1 = -int(round(pt2.x));
-	int y0 = -int(round(pt1.y));
-	int y1 = -int(round(pt2.y));
+	int x0 = int(round(pt1.x));
+	int x1 = int(round(pt2.x));
+	int y0 = int(round(pt1.y));
+	int y1 = int(round(pt2.y));
 
     int dx = abs(x1 - x0);
     int dy = abs(y1 - y0);
@@ -93,9 +93,12 @@ void bresenham(Point pt1, Point pt2, std::set<Point>& cells) {
         }
 
         //Add point to vector
-        Point new_cell = {.x = -x0, .y = -y0 };
-    	cells.insert(new_cell);
-    	// ROS_INFO("unfilled [%f, %f]", new_cell.x, new_cell.y);
+        Point new_cell = {.x = x0, .y = y0 };
+
+        if (x0 != x1 || y0 != y1) {
+        	cells.insert(new_cell);
+        }
+    	
     }
 }
 
