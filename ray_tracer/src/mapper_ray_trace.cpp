@@ -9,7 +9,9 @@
 #include <set>
 #include <tf/transform_datatypes.h>
 #include <vector>
+#include <visualization_msgs/Marker.h>
 
+// ****************************
 // Definitions
 struct Point {
 	float x;
@@ -24,19 +26,28 @@ struct Point {
 	}
 }; 
 
+// Pre-declarations
+void show_filled_laser_points(Point visualization_point);
+
 
 template <typename T> int sgn(T val) {
     return (T(0) < val) - (val < T(0));
 }
 
+// ***************************
 // Global variables
 nav_msgs::MapMetaData _map_data;
 geometry_msgs::Pose _robot_pose;
 sensor_msgs::LaserScan _laser_scan;
 
+Point min_xy_corner = {.x=-5, .y=-5};
+Point max_xy_corner = {.x=5, .y=5};
 
 bool gotMapMetaData = false;
 bool gotNewLaserScan = false;
+
+//visualization
+visualization_msgs::Marker marker_filled_points;
 
 // Outputs an array of unfilled cell coordinates (normalized to occupancy grid index format)
 //Bresenham line algorithm (pass empty vectors)
@@ -89,9 +100,15 @@ void bresenham(Point pt1, Point pt2, std::set<Point>& cells) {
 // Outputs the normalized position for occupancy grid
 Point robot_pose_to_norm_position(geometry_msgs::Pose &robot_pose, nav_msgs::MapMetaData &map_data, Point min_xy_corner, Point max_xy_corner) {
 
+	Point robot_position = {.x=robot_pose.position.x, .y=robot_pose.position.y};
+
 	// find robot position using top-left corner origin convention
-	float top_left_x = max_xy_corner.y - robot_pose.position.y;
-	float top_left_y = max_xy_corner.x - robot_pose.position.x;
+	// float top_left_x = max_xy_corner.y - robot_pose.position.y;
+	// float top_left_y = max_xy_corner.x - robot_pose.position.x;
+	// float top_left_x = max_xy_corner.x - robot_pose.position.x;
+	// float top_left_y = max_xy_corner.y - robot_pose.position.y;
+	float top_left_x = -max_xy_corner.x + robot_position.x;
+	float top_left_y = -max_xy_corner.y + robot_position.y;
 
 	// convert to occupancy grid distances
 	float norm_x = top_left_x / map_data.resolution;
@@ -101,10 +118,27 @@ Point robot_pose_to_norm_position(geometry_msgs::Pose &robot_pose, nav_msgs::Map
 	return norm_position;
 }
 
+
 float robot_pose_to_yaw(geometry_msgs::Pose &robot_pose) {
 	geometry_msgs::Quaternion robot_quat = robot_pose.orientation;
 	double yaw = tf::getYaw(robot_quat);
+	ROS_INFO("robot_pose_to_yaw: [%f]", yaw);
 	return yaw;
+}
+
+// For visualization
+Point norm_point_to_point(Point norm_point, float map_resolution, Point min_xy_corner, Point max_xy_corner) {
+
+	float top_left_x = norm_point.x * map_resolution;
+	float top_left_y = norm_point.y * map_resolution;
+
+	// float real_y = -1 * (top_left_x - max_xy_corner.y);
+	// float real_x = -1 * (top_left_y - max_xy_corner.x);
+	float real_x = (top_left_x + max_xy_corner.x);
+	float real_y = (top_left_y + max_xy_corner.y);
+
+	Point real_position = {real_x, real_y};
+	return real_position;
 }
 
 
@@ -119,21 +153,17 @@ float range_to_norm_range(float range, float map_resolution) {
 
 
 // Outputs the normalized laser points for occupancy grid
-void laser_scan_to_points(Point robot_norm_position, float yaw, sensor_msgs::LaserScan &scan, nav_msgs::MapMetaData &map_data, std::vector<Point> &norm_pts) {
+void laser_scan_to_points(Point robot_norm_position, float robot_yaw, sensor_msgs::LaserScan &scan, nav_msgs::MapMetaData &map_data, std::vector<Point> &norm_pts) {
 
 	std::vector<float> ranges = scan.ranges;
 	float curr_angle = scan.angle_min;
-	float true_laser_angle = curr_angle + yaw;
+	float true_laser_angle = curr_angle + robot_yaw;
 	float curr_range;
 
 	for (int i=0; i<ranges.size(); ++i) {
 		curr_angle += scan.angle_increment;
-		true_laser_angle = curr_angle + yaw;
+		true_laser_angle = curr_angle + robot_yaw;
 		curr_range = range_to_norm_range(ranges[i], map_data.resolution);
-
-		// ROS_INFO("curr_angle: %f", curr_angle);
-	 //    ROS_INFO(">>>true_laser_angle: %f", true_laser_angle);
-	 //    ROS_INFO(">>>>>>curr_range: %f", curr_range);
 
 		if (curr_range < 0) {
 			continue;
@@ -145,11 +175,41 @@ void laser_scan_to_points(Point robot_norm_position, float yaw, sensor_msgs::Las
 		int laser_x = robot_norm_position.x + laser_add_x;
 		int laser_y = robot_norm_position.y + laser_add_y;
 		Point curr_laser_point = {.x= laser_x, .y= laser_y };
+
 		norm_pts.push_back(curr_laser_point);
+
+		//Visualization
+		Point real_coord_laser_point = norm_point_to_point(curr_laser_point, map_data.resolution, min_xy_corner, max_xy_corner);
+		show_filled_laser_points(real_coord_laser_point);
+
+		ROS_INFO("robot_yaw: [%f]", robot_yaw);
 	}
 
 	return;
 }
+
+void show_filled_laser_points(Point visualization_point) {
+
+    geometry_msgs::Point p;
+   	p.x = visualization_point.x;
+   	p.y = visualization_point.y;
+   	p.z = 0; //not used
+   	marker_filled_points.points.push_back(p);
+}
+
+
+void setup_visualization_marker(visualization_msgs::Marker& marker) {
+	marker_filled_points.header.frame_id = "/odom";
+    marker_filled_points.ns              = "filled_laser_points";
+    marker_filled_points.action = visualization_msgs::Marker::ADD;
+    marker_filled_points.id = 0;
+    marker_filled_points.type = visualization_msgs::Marker::POINTS;
+    marker_filled_points.scale.x = 0.1;
+    marker_filled_points.scale.y = 0.1;
+    marker_filled_points.color.b = 1.0f;
+    marker_filled_points.color.a = 1;
+}
+
 
 // Get all filled points for publishing
 // input: normalized float points from laser scan
@@ -180,20 +240,23 @@ void points_to_indices(std::vector<Point> points, std::vector<lab2_msgs::index> 
 	}
 }
 
+
+
 // ******************
 // Callback functions
 
 void map_details_callback(const nav_msgs::MapMetaData& map_details) {
 
 	_map_data = map_details;
-	// ROS_INFO("MAAAP: res: %f, w: %d", _map_data.resolution, _map_data.width);
+
 	gotMapMetaData = true;
 }
 
+                                                    //Stamped
+void refined_pose_callback(const geometry_msgs::Pose& refined_pose) {
 
-void refined_pose_callback(const geometry_msgs::PoseStamped& refined_pose) {
-
-	_robot_pose = refined_pose.pose;
+	// _robot_pose = refined_pose.pose;
+	_robot_pose = refined_pose;
 
 }
 
@@ -219,12 +282,13 @@ int main(int argc, char **argv) {
 	ros::Publisher raytrace_output = n.advertise<lab2_msgs::occupancy_update>("/raytrace_output", 10);
 
 	ros::Subscriber map_details_sub = n.subscribe("/map_meta_data", 10, map_details_callback);
-	ros::Subscriber refined_pose_sub = n.subscribe("/estimatedpose", 10, refined_pose_callback);
+	// ros::Subscriber refined_pose_sub = n.subscribe("/estimatedpose", 10, refined_pose_callback);
+	ros::Subscriber refined_pose_sub = n.subscribe("/indoor_pos", 10, refined_pose_callback);
 	ros::Subscriber scan_sub = n.subscribe("/scan", 10, scan_callback);
 
+	//Visualization
+	ros::Publisher filled_points_pub = n.advertise<visualization_msgs::Marker>("filled_laser_points", 1, true);
 
-	Point min_xy_corner = {.x=-2, .y=-2};
-	Point max_xy_corner = {.x=2, .y=2};
 
 	ros::Rate loop_rate(10);
 
@@ -238,6 +302,12 @@ int main(int argc, char **argv) {
      		continue;
      	}
      	gotNewLaserScan = false;
+
+
+     	//RESETTING VARIABLES
+     	visualization_msgs::Marker empty_marker_struct;
+     	marker_filled_points = empty_marker_struct;
+     	setup_visualization_marker(marker_filled_points);
 
 
 		// *******************************
@@ -272,8 +342,8 @@ int main(int argc, char **argv) {
 		for (it = unfilled_cells_set.begin(); it != unfilled_cells_set.end(); ++it) {
 			Point curr_pt = *it;
 			lab2_msgs::index curr_index;
-			curr_index.row = int(curr_pt.x);
-			curr_index.col = int(curr_pt.y);
+			curr_index.row = int(round(curr_pt.x));
+			curr_index.col = int(round(curr_pt.y));
 
 			unfilled_cells.push_back(curr_index);
 		}
@@ -286,6 +356,9 @@ int main(int argc, char **argv) {
 		output_msg.unfilled = unfilled_cells;
 
 		raytrace_output.publish(output_msg);
+
+		//visualization publish
+		filled_points_pub.publish(marker_filled_points);
 
 	}
 
