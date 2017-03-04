@@ -12,6 +12,7 @@
 sensor_msgs::LaserScan old_scan;
 sensor_msgs::LaserScan new_scan;
 bool got_new_scan = false;
+bool currently_processing = false;
 
 struct trans
 {
