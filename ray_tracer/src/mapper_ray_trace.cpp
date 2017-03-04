@@ -58,14 +58,14 @@ visualization_msgs::Marker marker_unfilled_points;
 //	  vectors of integers and shold be defined where this function is called from.
 void bresenham(Point pt1, Point pt2, std::set<Point>& cells) {
 
-	int x0 = int(round(pt1.x));
-	int x1 = int(round(pt1.y));
-	int y0 = int(round(pt2.x));
-	int y1 = int(round(pt2.y));
+	int x0 = -int(round(pt1.x));
+	int x1 = -int(round(pt2.x));
+	int y0 = -int(round(pt1.y));
+	int y1 = -int(round(pt2.y));
 
     int dx = abs(x1 - x0);
     int dy = abs(y1 - y0);
-//ROS_INFO("dxdy [%d, %d]", dx, dy);
+    ROS_INFO("laser [%d, %d]", y0, y1);
 
     int dx2 = x1 - x0;
     int dy2 = y1 - y0;
@@ -94,12 +94,24 @@ void bresenham(Point pt1, Point pt2, std::set<Point>& cells) {
         }
 
         //Add point to vector
-        Point new_cell = {.x = x0, .y = y0 };
+        Point new_cell = {.x = -x0, .y = -y0 };
     	cells.insert(new_cell);
     	// ROS_INFO("unfilled [%f, %f]", new_cell.x, new_cell.y);
     }
 }
 
+
+void custom_bresenham(Point pt1, Point pt2, std::set<Point>& cells) {
+	float x0 = pt1.x;
+	float x1 = pt2.x;
+	float y0 = pt1.y;
+	float y1 = pt2.y;
+
+
+	float dx = x1 - x0;
+	float dy = y1 - y0;
+	float derr = abs(dy / dx);
+}
 
 
 // Outputs the normalized position for occupancy grid
