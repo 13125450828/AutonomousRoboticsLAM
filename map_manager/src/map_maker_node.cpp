@@ -33,7 +33,7 @@ nav_msgs::OccupancyGrid map;
 
 double log_odd (int P)
 {
-	P = P / 100; // convert to value between 0 and 1
+	P = P / 100.0; // convert to value between 0 and 1
 	return log(P / (1-P));
 }
 
