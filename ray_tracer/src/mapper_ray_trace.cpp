@@ -61,7 +61,7 @@ float map_resolution_offset =  0.00000000150;
 bool gotMapMetaData = false;
 bool gotNewLaserScan = false;
 
-float laser_scan_range = 5.8f;
+float laser_scan_range = 5.5f;
 
 //visualization
 visualization_msgs::Marker marker_filled_points;
@@ -304,8 +304,12 @@ void get_filled_cells(std::vector<Point> &norm_pts, std::vector<lab2_msgs::index
 
 		float distance_from_robot_to_point = sqrt(pow(robot_pos.x - x,2) + pow(robot_pos.y - y,2));
 
+		//Remove filled point if its the max range
 		if (distance_from_robot_to_point >= (laser_scan_range/1.1 /_map_data.resolution)) {
-
+			continue;
+		}
+		// Remove filled point if its too close to robot
+		else if (distance_from_robot_to_point <= 5) {
 			continue;
 		}
 
@@ -422,10 +426,6 @@ int main(int argc, char **argv) {
 		std::vector<lab2_msgs::index> filled_cells;
 		std::vector<lab2_msgs::index> filled_cells_for_visualization;
 		get_filled_cells(laser_pts, filled_cells);
-
-
-
-		// ROS_INFO("robot[%f,%f] --- laser_pts[0]=[%f,%f]", robot_norm_position.x, robot_norm_position.y, laser_pts[0].x, laser_pts[0].y);
 		
 
 		// *******************************
