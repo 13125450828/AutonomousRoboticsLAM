@@ -5,6 +5,7 @@
 #include <nav_msgs/MapMetaData.h>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <sensor_msgs/LaserScan.h>
 #include <set>
 #include <tf/transform_datatypes.h>
@@ -348,9 +349,9 @@ void map_details_callback(const nav_msgs::MapMetaData& map_details) {
 }
 
                                                    
-void refined_pose_callback(const geometry_msgs::PoseStamped& refined_pose) {
+void refined_pose_callback(const geometry_msgs::PoseWithCovarianceStamped& refined_pose) {
 
-	_robot_pose = refined_pose.pose;
+	_robot_pose = refined_pose.pose.pose;
 
 }
 
