@@ -70,11 +70,17 @@ void pose_callback(const gazebo_msgs::ModelStates& msg)
         ips_y = msg.pose[i].position.y ;
         ips_yaw = tf::getYaw(msg.pose[i].orientation);
         ipsUpdate = true;
-//        ROS_INFO("IPS CALLBACK");
+//       if (firstIPSUpdate == false){
+        firstIPSUpdate = true;  
+        for (int i = 0; i < NUM_PARTICLES; i++){
+                particleMatrix(0,i) = ips_x;
+                particleMatrix(1,i) = ips_y;
+                particleMatrix(2,i) = ips_yaw; 
+        }
+    
     //}
 }
 */
-
 float sampleNormdist(float mu, float sigma){
     std::random_device rd; //todo move to man to run only once
     std::mt19937 e2(rd());
@@ -85,6 +91,7 @@ float sampleNormdist(float mu, float sigma){
 
 
 //Callback function for the Position topic (LIVE)
+
 void pose_callback(const geometry_msgs::PoseWithCovarianceStamped& msg)
 {
     ips_x = msg.pose.pose.position.x; // Robot X psotition
@@ -101,6 +108,7 @@ void pose_callback(const geometry_msgs::PoseWithCovarianceStamped& msg)
     }
     //ROS_DEBUG("pose_callback X: %f Y: %f Yaw: %f", X, Y, Yaw);
 }
+
 
 //Callback function for the Oomtry topic
 void odometry_calback(const nav_msgs::Odometry& msg){
@@ -224,6 +232,9 @@ void drawArrow(int k, double x, double y, double z,double qx, double qy, double 
    thePoints.scale.z = 0.0;
    thePoints.color.r = 1.0f ;
    thePoints.color.a = 1.0; 
+   thePoints.pose.position.x = x;
+   thePoints.pose.position.y = y;
+   thePoints.pose.position.z = 0;
    thePoints.pose.orientation.x = qx;
    thePoints.pose.orientation.y = qy;
    thePoints.pose.orientation.z = qz;
@@ -273,7 +284,7 @@ int main(int argc, char **argv)
 
     Q_matrix [0] = 0.01;
     Q_matrix [1] = 0.01;
-    Q_matrix [2] = 0.00;
+    Q_matrix [2] = 0.01;
 
     R_matrix [0] = 0.01;
     R_matrix [1] = 0.01;
@@ -378,7 +389,7 @@ int main(int argc, char **argv)
                 particleMatrix(0,i) = particleMatrix(0,i) + dt*cos(particleMatrix(2,i))*X_input[0] + sampleNormdist(0,Q_matrix[0]); //x update
                 particleMatrix(1,i) = particleMatrix(1,i) + dt*sin(particleMatrix(2,i))*X_input[1] + sampleNormdist(0,Q_matrix[1]); //y update 
                 particleMatrix(2,i) = particleMatrix(2,i) + dt*X_input[2] + sampleNormdist(0,Q_matrix[2]);; //TODO add noise to yaw update 
-                //particleMatrix(2,i) = atan2(sin(particleMatrix(2,i)),cos(particleMatrix(2,i))); //Convert YAW to a bearing 
+                particleMatrix(2,i) = atan2(sin(particleMatrix(2,i)),cos(particleMatrix(2,i))); 
                 //ROS_INFO("Angular vel: %f", X_input[2]);
                 //Calculate individual weights
                 
@@ -455,11 +466,11 @@ int main(int argc, char **argv)
                     bestPDFParticles (2,j) = particleMatrix(2,tempindex);
                 }
                 particleMatrix = bestPDFParticles; //store updated particles
+                pose_pub.publish(final_pos);
                 } 
             }
         marker_pub.publish(points);
         path_pub.publish(path);
-        pose_pub.publish(final_pos);
         //uncomment this if you want to send a fixed velocity command to test the particle filter X = 0.1 Z = 0.1 works well
         //vel.linear.x = 0.1; // set linear speed
         //vel.angular.z = 0.1; // set angular speed
