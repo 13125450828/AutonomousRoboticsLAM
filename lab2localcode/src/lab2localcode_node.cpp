@@ -45,8 +45,12 @@ double ang_v;
 const double ROSLOOPRATE = 10; // HZ
 const double dt = 1/ROSLOOPRATE;
 const int NUM_PARTICLES = 50;
+Matrix <float, 4, NUM_PARTICLES, RowMajor> particleMatrix = Matrix<float,4,NUM_PARTICLES>::Zero(); //Particles for our states
+Matrix <float, 4, NUM_PARTICLES, RowMajor> bestPDFParticles = Matrix<float, 4, NUM_PARTICLES>::Zero(); //Matrix used to check weighting 
 bool motion = false; //flag for if the turtlebot actually moved
 bool ipsUpdate = false;
+bool firstIPSUpdate = false; 
+
 double motionthreshold = 0.0;
 
 short sgn(int x) { return x >= 0 ? 1 : -1; }
@@ -54,6 +58,7 @@ short sgn(int x) { return x >= 0 ? 1 : -1; }
 //Callback function for the Position topic (SIMULATION)
 //Given code, need to switch to real IPS 
 
+/*
 void pose_callback(const gazebo_msgs::ModelStates& msg) 
 {
     int i;
@@ -68,6 +73,7 @@ void pose_callback(const gazebo_msgs::ModelStates& msg)
 //        ROS_INFO("IPS CALLBACK");
     //}
 }
+*/
 
 float sampleNormdist(float mu, float sigma){
     std::random_device rd; //todo move to man to run only once
@@ -77,17 +83,22 @@ float sampleNormdist(float mu, float sigma){
 }
 
 
-/*
+
 //Callback function for the Position topic (LIVE)
 void pose_callback(const geometry_msgs::PoseWithCovarianceStamped& msg)
 {
     ips_x = msg.pose.pose.position.x; // Robot X psotition
     ips_y = msg.pose.pose.position.y; // Robot Y psotition
     ips_yaw = tf::getYaw(msg.pose.pose.orientation); // Robot Yaw
-    ipsUpdate = true;   
+    ipsUpdate = true; 
+    if (firstIPSUpdate == false){
+        firstIPSUpdate = true;  
+        particleMatrix(0,1) = ips_x;
+        particleMatrix(0,2) = ips_y;
+        particleMatrix(0,3) = ips_yaw; 
+    }
     //ROS_DEBUG("pose_callback X: %f Y: %f Yaw: %f", X, Y, Yaw);
 }
-*/
 
 //Callback function for the Oomtry topic
 void odometry_calback(const nav_msgs::Odometry& msg){
@@ -233,8 +244,8 @@ int main(int argc, char **argv)
     ros::NodeHandle n;
 
     //Subscribe to the desired topics and assign callbacks
-    pose_sub = n.subscribe("/gazebo/model_states", 1, pose_callback);
-    //pose_sub = n.subscribe("indoor_pos", 1, pose_callback);
+    //pose_sub = n.subscribe("/gazebo/model_states", 1, pose_callback);
+    pose_sub = n.subscribe("indoor_pos", 1, pose_callback);
     map_sub = n.subscribe("/map", 1, map_callback);
     odom_sub = n.subscribe("/odom",1,odometry_calback);
     //ros::subscriber pose_sub = n.subscribe("/indoor_pos", 1, )
@@ -276,8 +287,7 @@ int main(int argc, char **argv)
     std::vector<float> CumSum (NUM_PARTICLES);
     //Particle matrix
     //Col 1: X Col 2: Y Col 3: Yaw Col 4: Weight of Particle 
-    Matrix <float, 4, NUM_PARTICLES, RowMajor> particleMatrix = Matrix<float,4,NUM_PARTICLES>::Zero(); //Particles for our states
-    Matrix <float, 4, NUM_PARTICLES, RowMajor> bestPDFParticles = Matrix<float, 4, NUM_PARTICLES>::Zero(); //Matrix used to check weighting 
+
 
     //Max and min locations for initial particle spread 
     int randfactor = 0.1;

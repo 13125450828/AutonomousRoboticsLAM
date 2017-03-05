@@ -62,7 +62,8 @@ float map_resolution_offset =  0.00000000150;
 bool gotMapMetaData = false;
 bool gotNewLaserScan = false;
 
-float laser_scan_range = 5.0f;
+// float laser_scan_range = 5.0f;
+float laser_scan_range = 10.0f;
 
 //visualization
 visualization_msgs::Marker marker_filled_points;
@@ -103,11 +104,11 @@ void bresenham(Point pt1, Point pt2, std::set<PointInt>& cells) {
     PointInt cell0Int = {.x = int(round(cell0.x)), .y= int(round(cell0.y))};
     cells.insert(cell0Int);
 
-    // int signum_dx2 = sgn(dx2);
-    // int signum_dy2 = sgn(dy2);
+  	// Note: The last few bressenham points often overlaps with the actual object, this ignore those values
 
+    int ign_pts = 2;
     // while (x0 != x1 || y0 != y1) {
-    while (abs(x1-x0) > 1 || abs(y1-y0) > 1) {
+    while (abs(x1-x0) > ign_pts || abs(y1-y0) > ign_pts) {
         if (s) y0+=sgn(dy2); else x0+=sgn(dx2);
         if (d < 0) d += inc1;
         else {
@@ -205,7 +206,9 @@ void laser_scan_to_points(Point robot_norm_position, float robot_yaw, sensor_msg
 
 	bool farFromObject = true;
 	int contiguousNaNs = 0;
+
 	for (int i=0; i<ranges.size(); ++i) {
+
 		curr_angle += scan.angle_increment;
 		true_laser_angle = curr_angle + robot_yaw;
 
@@ -215,7 +218,12 @@ void laser_scan_to_points(Point robot_norm_position, float robot_yaw, sensor_msg
 			contiguousNaNs = 0;
 		}
 
-		if (contiguousNaNs > 5) {
+		//Note: This prevents leaks of the laser scan, the sensor is noisy
+		// and is interleaved with NaNs and valid distances. To prevent the 
+		// NaN distances "erasing" the valid distances, do no trust the 
+		// interleaved NaN distances and ignore them in favor of the 
+		// nearby valid rays
+		if (contiguousNaNs > 15) {
 			farFromObject = true;
 		} else {
 			farFromObject = false;
@@ -349,9 +357,10 @@ void map_details_callback(const nav_msgs::MapMetaData& map_details) {
 }
 
                                                    
-void refined_pose_callback(const geometry_msgs::PoseWithCovarianceStamped& refined_pose) {
+// void refined_pose_callback(const geometry_msgs::PoseWithCovarianceStamped& refined_pose) { //for indoor_pose updates 1Hz
+void refined_pose_callback(const geometry_msgs::PoseStamped& refined_pose) { //for estimatedpose
 
-	_robot_pose = refined_pose.pose.pose;
+	_robot_pose = refined_pose.pose;
 
 }
 
@@ -434,6 +443,14 @@ int main(int argc, char **argv) {
 		// Getting unfilled_cells
 		std::set<PointInt> unfilled_cells_set;
 		for (int i=0; i<laser_pts.size(); i++) {
+			// Note: Ignore the outer unfilled 15 rays, because the float to int
+			// conversion by bresenham could be offset, and set the cells
+			// always to unfilled on the outer edges of the laser scan cone
+			// which acts as an eraser for the filled cells that were detected
+			int ign_rays = 20;
+			if (i<=ign_rays || (laser_pts.size()-1 - i) <=ign_rays) {
+				continue;
+			}
 
 			bresenham(robot_norm_position, laser_pts[i], unfilled_cells_set);
 		}
