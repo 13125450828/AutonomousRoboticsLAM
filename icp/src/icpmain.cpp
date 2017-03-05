@@ -8,9 +8,18 @@
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/LaserScan.h>
 #include <laser_geometry/laser_geometry.h>
+#include <lab2_msgs/slam.h>
+#include <geometry_msgs/PoseStamped.h>
 
 sensor_msgs::LaserScan old_scan;
 sensor_msgs::LaserScan new_scan;
+
+geometry_msgs::PoseStamped old_pose;
+geometry_msgs::PoseStamped new_pose;
+
+sensor_msgs::PointCloud old_cloud;
+sensor_msgs::PointCloud new_cloud;
+
 bool got_new_scan = false;
 bool currently_processing = false;
 
@@ -47,6 +56,13 @@ void callback(icp::ICPConfig& config, uint32_t level) {
   corr_test_skip = config.corr_test_skip;
   decay_const = config.decay_const;
   timeout = config.timeout;
+
+  //old_scan = sensor_msgs::LaserScan();
+  //new_scan = sensor_msgs::LaserScan();
+  //old_cloud = sensor_msgs::PointCloud();
+  //new_cloud = sensor_msgs::PointCloud();
+  //got_new_scan = false;
+
   new_params = true;
 }
 
@@ -58,6 +74,7 @@ void TransformScan(sensor_msgs::LaserScan* scan, sensor_msgs::PointCloud* cloud)
   float z = 0.0;
 
   cloud->header.frame_id = scan->header.frame_id;
+  cloud->points.clear();
 
   //projector_.projectLaser(scan_in, cloud);
   //ROS_INFO_STREAM("Starting scan iter");
@@ -71,7 +88,7 @@ void TransformScan(sensor_msgs::LaserScan* scan, sensor_msgs::PointCloud* cloud)
 
     geometry_msgs::Point32 p;
     p.x = c*r;
-    p.y = s*s*r;
+    p.y = s*r;
     p.z = z;
 
     //ROS_INFO_STREAM("Adding point " << i);
@@ -103,7 +120,25 @@ void TransformCloud(sensor_msgs::PointCloud* cloud, trans t)
     (*it).y = s*x + c*y + t.ty;
     z = (*it).z;
   }
+
+  // hard-coded
+  cloud->header.frame_id = "odom";
 }
+
+void TransformCloud(sensor_msgs::PointCloud* cloud, geometry_msgs::PoseStamped pose)
+{
+  
+  trans t;
+
+  t.tx = pose.pose.position.x;
+  t.ty = pose.pose.position.y;
+
+  t.theta = -2.0*asin(pose.pose.orientation.z);
+
+  TransformCloud(cloud, t);
+
+}
+
 
 
 
@@ -180,7 +215,7 @@ std::vector<unsigned int> GetCorrespondances(std::vector<geometry_msgs::Point32>
     min_index = -1;
     index = 0;
 
-    for(std::vector<geometry_msgs::Point32>::iterator it2 = cloud2.begin(); it2 != cloud2.end(); std::advance(it2, 1+corr_test_skip))
+    for(std::vector<geometry_msgs::Point32>::iterator it2 = cloud2.begin(); it2 != cloud2.end(); std::advance(it2, 1))
     {
 
       dx = (*it1).x - (*it2).x;
@@ -219,18 +254,19 @@ trans ICP(sensor_msgs::PointCloud* c1, sensor_msgs::PointCloud* c2, sensor_msgs:
 
   for(int i = 0; i < outer_loop_count; i++)
   {
+    //ROS_INFO_STREAM("Getting Corresponsances");
     std::vector<unsigned int> corr = GetCorrespondances((*c1).points, (*c2).points);
 
     trans grad = GetFullGradient((*c1).points, (*c2).points, corr, t_init, use_alpha);
 
-    ROS_INFO_STREAM("Full Grad: " << grad.tx << " " << grad.ty << " " << grad.theta);
+    //ROS_INFO_STREAM("Full Grad: " << grad.tx << " " << grad.ty << " " << grad.theta);
 
     trans vis_grad;
     vis_grad.tx = -grad.tx;
     vis_grad.ty = -grad.ty;
     vis_grad.theta = -grad.theta;
-    TransformCloud(temp, vis_grad);
-    pub->publish(*temp);
+    //TransformCloud(temp, vis_grad);
+    //pub->publish(*temp);
 
     t_init.tx = t_init.tx - grad.tx;
     t_init.ty = t_init.ty - grad.ty; 
@@ -250,19 +286,51 @@ trans ICP(sensor_msgs::PointCloud* c1, sensor_msgs::PointCloud* c2, sensor_msgs:
 }
 
 
-void LaserCallback(sensor_msgs::LaserScan scan)
+void SLAMCallback(lab2_msgs::slam msg)
 {
+  ROS_INFO_STREAM("SLAM Callback");
   if (currently_processing)
   {
     return;
   }
-  new_scan = scan;
+  new_scan = msg.scan;
+  new_pose = msg.pose;
   got_new_scan = true;
+  ROS_INFO_STREAM("SLAM Callback Successful");
+}
+
+geometry_msgs::PoseStamped AppendTransform(trans t)
+{
+  /*
+  float new_p_th = 2.0*asin(new_pose.pose.orientation.z);
+  float new_p_c = cos(new_p_th);
+  float new_p_s = sin(new_p_th);//ros copy one pointcloud into another
+  */
+
+  geometry_msgs::PoseStamped pose_out;
+
+  /*
+  pose_out.pose.position.x = new_pose.pose.position.x + t.tx*new_p_c - t.ty*new_p_s;
+  pose_out.pose.position.y = new_pose.pose.position.y + t.tx*new_p_s + t.ty*new_p_c;
+  pose_out.pose.position.z = 0;
+
+  pose_out.pose.orientation.w = cos((new_p_th + t.theta)/2.0);
+  pose_out.pose.orientation.x = 0;
+  pose_out.pose.orientation.y = 0;
+  pose_out.pose.orientation.z = sin((new_p_th + t.theta)/2.0);
+  */
 }
 
 
-void Fake(ros::Publisher test_pub1, ros::Publisher test_pub2, ros::Publisher test_pubres);
-void Real();
+void CopyPointCloud(sensor_msgs::PointCloud* dest, sensor_msgs::PointCloud* src)
+{
+  dest->points.clear();
+
+  for(std::vector<geometry_msgs::Point32>::iterator it = src->points.begin(); it != src->points.end(); std::advance(it, 1))
+  {
+    dest->points.push_back((*it));
+  }
+}
 
 int main(int argc, char **argv) {
   ROS_INFO_STREAM("Starting");
@@ -279,16 +347,13 @@ int main(int argc, char **argv) {
   ros::Publisher vis_new = n.advertise<sensor_msgs::PointCloud>("/cloud_new", 5);
   ros::Publisher vis_old= n.advertise<sensor_msgs::PointCloud>("/cloud_old", 5);
   ros::Publisher vis_result = n.advertise<sensor_msgs::PointCloud>("/cloud_res", 5);
-  ros::Publisher mot_pub = n.advertise<geometry_msgs::Pose>("/icp_change", 5);
+  ros::Publisher mot_pub = n.advertise<geometry_msgs::PoseStamped>("/icp_pose", 5);
   ROS_INFO_STREAM("Publishers Created");
 
-  ros::Subscriber las_sub = n.subscribe("/scan", 10, LaserCallback);
-
-  sleep(2);
+  ros::Subscriber las_sub = n.subscribe("/slam_inputs", 10, SLAMCallback);
 
   
-  sensor_msgs::PointCloud old_cloud;
-  sensor_msgs::PointCloud new_cloud;
+  
   sensor_msgs::PointCloud cloud_disp;
 
   while(ros::ok())
@@ -296,24 +361,24 @@ int main(int argc, char **argv) {
     
     //ROS_INFO_STREAM("Transfering data to clouds");
 
-
-    if(got_new_scan && (!old_scan.ranges.empty() && !new_scan.ranges.empty()))
+    currently_processing = true;
+    if(got_new_scan && (!old_cloud.points.empty() && !new_scan.ranges.empty()))
     {
-      currently_processing = true;
 
-      TransformScan(&old_scan, &cloud_disp);
+      //TransformScan(&old_scan, &cloud_disp);
+      ROS_INFO_STREAM("Changing scan to cloud");
       TransformScan(&new_scan, &new_cloud);
 
-      trans t;
-      t.tx = test_tx;
-      t.ty = test_ty;
-      t.theta = test_theta;
+      ROS_INFO_STREAM("Transforming Cloud");
+      TransformCloud(&new_cloud, new_pose);
 
-      ROS_INFO_STREAM("Starting ICP");
-      vis_new.publish(new_cloud);
-      vis_old.publish(old_cloud);
+      
+      ROS_INFO_STREAM("Publishing original clouds");
+      //vis_new.publish(new_cloud);
+      //vis_old.publish(old_cloud);
 
       ros::Time t1 = ros::Time::now();
+      ROS_INFO_STREAM("Starting ICP");
       trans new_t = ICP(&old_cloud, &new_cloud, &cloud_disp, &vis_result);
       ros::Time t2 = ros::Time::now();
 
@@ -321,33 +386,62 @@ int main(int argc, char **argv) {
       ROS_INFO_STREAM("Final: " << new_t.tx << ", " << new_t.ty << ", " << new_t.theta);
 
 
-      TransformCloud(&old_cloud, new_t);
-      vis_result.publish(new_cloud);
+      //TransformCloud(&old_cloud, new_t);
+      //vis_result.publish(new_cloud);
 
 
-      geometry_msgs::Pose pose_out;
+      
+      //old_scan = new_scan;
+      //old_cloud = new_cloud;
+      //old_cloud.points = new_cloud.points;
+      //ROS_INFO_STREAM("Copying old datax");
+      //CopyPointCloud(&old_cloud, &new_cloud);
 
-      pose_out.position.x = new_t.tx;
-      pose_out.position.y = new_t.ty;
-      pose_out.position.z = 0;
+      ROS_INFO_STREAM("Outputing");
 
-      pose_out.orientation.w = cos(new_t.theta/2.0);
-      pose_out.orientation.x = 0;
-      pose_out.orientation.y = 0;
-      pose_out.orientation.z = sin(new_t.theta/2.0);
+      float new_p_th = 2.0*asin(new_pose.pose.orientation.z);
+      float new_p_c = cos(new_p_th);
+      float new_p_s = sin(new_p_th);//ros copy one pointcloud into another
+      
+      geometry_msgs::PoseStamped pose_out;
 
+      pose_out.pose.position.x = new_pose.pose.position.x + new_t.tx*new_p_c - new_t.ty*new_p_s;
+      pose_out.pose.position.y = new_pose.pose.position.y + new_t.tx*new_p_s + new_t.ty*new_p_c;
+      pose_out.pose.position.z = 0;
+
+      pose_out.pose.orientation.w = cos((new_p_th + new_t.theta)/2.0);
+      pose_out.pose.orientation.x = 0;
+      pose_out.pose.orientation.y = 0;
+      pose_out.pose.orientation.z = sin((new_p_th + new_t.theta)/2.0);
+
+      old_pose = pose_out;
       mot_pub.publish(pose_out);
 
+      ROS_INFO_STREAM("Resetting");
       got_new_scan = false;
-      currently_processing = false;
+      ROS_INFO_STREAM(" ");
     }
-
-    if(!new_scan.ranges.empty())
+    else if(got_new_scan && old_cloud.points.empty() && !new_scan.ranges.empty())
     {
+      ROS_INFO_STREAM("Filling from new scan");
       old_scan = new_scan;
+      TransformScan(&new_scan, &new_cloud);
+      old_pose = new_pose;
+      old_cloud.header.frame_id="odom";
+      CopyPointCloud(&old_cloud, &new_cloud);
+      //TransformScan(&old_scan, &old_cloud);
+      //TransformCloud(&old_cloud, old_pose);
+      got_new_scan = false;
     }
+    else if (got_new_scan)
+    {
+      ROS_INFO_STREAM("Some other state");
+      ROS_INFO_STREAM(" " << old_cloud.points.empty() << " " << new_scan.ranges.empty() << " " << new_cloud.points.empty());
+    }
+    currently_processing = false;
 
 
+    //ROS_INFO_STREAM("*");
     ros::spinOnce();
   }
   
