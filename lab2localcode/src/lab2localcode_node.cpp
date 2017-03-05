@@ -93,9 +93,11 @@ void pose_callback(const geometry_msgs::PoseWithCovarianceStamped& msg)
     ipsUpdate = true; 
     if (firstIPSUpdate == false){
         firstIPSUpdate = true;  
-        particleMatrix(0,1) = ips_x;
-        particleMatrix(0,2) = ips_y;
-        particleMatrix(0,3) = ips_yaw; 
+        for (int i = 0; i < NUM_PARTICLES; i++){
+                particleMatrix(i,1) = ips_x;
+                particleMatrix(i,2) = ips_y;
+                particleMatrix(i,3) = ips_yaw; 
+        }
     }
     //ROS_DEBUG("pose_callback X: %f Y: %f Yaw: %f", X, Y, Yaw);
 }
@@ -295,11 +297,13 @@ int main(int argc, char **argv)
 
     ROS_INFO("Populating particles uniformally");
     //populate particles uniformally 
+    /*
     for (int i = 0; i < NUM_PARTICLES; i++){
         particleMatrix (0,i) = (double) randfactor*rand()/RAND_MAX;
         particleMatrix (1,i) = (double) randfactor*rand()/RAND_MAX;
         particleMatrix (2,i) = (double) rand()/RAND_MAX * 2 * M_PI - M_PI;  
     }
+    */
     //Set the loop rate
     ros::Rate loop_rate(ROSLOOPRATE);    //10Hz update rate
     //setup RVIZ Viz stuff
