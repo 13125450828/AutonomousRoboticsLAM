@@ -61,7 +61,7 @@ float map_resolution_offset =  0.00000000150;
 bool gotMapMetaData = false;
 bool gotNewLaserScan = false;
 
-float laser_scan_range = 5.5f;
+float laser_scan_range = 5.0f;
 
 //visualization
 visualization_msgs::Marker marker_filled_points;
@@ -375,8 +375,9 @@ int main(int argc, char **argv) {
 	ros::Publisher raytrace_output = n.advertise<lab2_msgs::occupancy_update>("/raytrace_output", 10);
 
 	ros::Subscriber map_details_sub = n.subscribe("/map_meta_data", 10, map_details_callback);
-	// ros::Subscriber refined_pose_sub = n.subscribe("/estimatedpose", 10, refined_pose_callback);
-	ros::Subscriber refined_pose_sub = n.subscribe("/indoor_pos", 10, refined_pose_callback);
+	ros::Subscriber refined_pose_sub = n.subscribe("/estimatedpose", 10, refined_pose_callback);
+	// ros::Subscriber refined_pose_sub = n.subscribe("/indoor_pos", 10, refined_pose_callback);
+	// ros::Subscriber refined_pose_sub = n.subscribe("/ekf_est", 10, refined_pose_callback);
 	ros::Subscriber scan_sub = n.subscribe("/scan", 10, scan_callback);
 
 	//Visualization
