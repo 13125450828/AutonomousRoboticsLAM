@@ -23,9 +23,13 @@ const int MAP_WIDTH = uint(MAP_SIDE_LENGTH / MAP_RESOLUTION);
 const int MAP_HEIGHT = MAP_WIDTH;
 const int MAP_SIZE = MAP_WIDTH * MAP_HEIGHT;
 
-const double empty_L = log(0.499999 / (1-0.499999));
-const double occupied_L = log(0.999999 / (1-0.999999));
-const double initial_L = log(0.5 / (1-0.5)); 
+#define EMPTY_ODD 0.48
+#define FULL_ODD 0.999
+#define INIT_ODD 0.5
+
+const double empty_L = log(EMPTY_ODD / (1-EMPTY_ODD));
+const double occupied_L = log(FULL_ODD / (1-FULL_ODD));
+const double initial_L = log(INIT_ODD / (1-INIT_ODD)); 
 
 // Initialize the map
 //char map_data[MAP_WIDTH * MAP_HEIGHT];
@@ -33,14 +37,20 @@ nav_msgs::OccupancyGrid map;
 
 double log_odd (int P)
 {
-	P = P / 100.0; // convert to value between 0 and 1
-	return log(P / (1-P));
+	float p = P / 100.0; // convert to value between 0 and 1
+	return log(p / (1-p));
 }
 
 int inv_log_odd (double L)
 {
 	double exp_L = exp(L);
-	return 100 * exp_L / (1+exp_L);
+	int temp = 100 * exp_L / (1+exp_L);
+	if (temp == 100)
+		temp = 99;
+	else if(temp == 0)
+		temp = 1;
+	return temp;
+
 }
 
 //Callback function for the Position topic 
@@ -57,8 +67,8 @@ void occupancy_update_callback(const lab2_msgs::occupancy_update& msg)
 
 	for (int intI = 0; intI < length_empty; intI++)
 	{
-		j = MAP_WIDTH + msg.unfilled[intI].row -1;
-		i = MAP_WIDTH + msg.unfilled[intI].col -1;
+		j = MAP_WIDTH + msg.unfilled[intI].row;
+		i = MAP_WIDTH + msg.unfilled[intI].col;
 		
 		if (i>=0 && j>=0  && i < MAP_WIDTH && j<MAP_HEIGHT)
 		{
@@ -71,15 +81,17 @@ void occupancy_update_callback(const lab2_msgs::occupancy_update& msg)
 		}
 
 		// Update
+		int test = inv_log_odd(empty_L + prev_L + initial_L);
 		temp = char(inv_log_odd(empty_L + prev_L + initial_L));
+		ROS_INFO_STREAM("UF " << (int)temp << " " << test << " x");
 		if (temp < 100)
 			map.data[data_cell] = temp;
 	}
 
 	for (int intI = 0; intI < length_occupied; intI++)
 	{
-		j = MAP_WIDTH + msg.filled[intI].row -1;
-		i = MAP_WIDTH + msg.filled[intI].col -1;
+		j = MAP_WIDTH + msg.filled[intI].row;
+		i = MAP_WIDTH + msg.filled[intI].col;
 
 		if (i>=0 && j>=0 && i < MAP_WIDTH && j < MAP_HEIGHT)
 		{
@@ -92,7 +104,9 @@ void occupancy_update_callback(const lab2_msgs::occupancy_update& msg)
 		}
 
 		// Update
-		temp = 99;//char(inv_log_odd(occupied_L + prev_L + initial_L));
+		int test = inv_log_odd(empty_L + prev_L + initial_L);
+		temp = char(inv_log_odd(occupied_L + prev_L + initial_L));
+		ROS_INFO_STREAM("F  " << (int)temp << " "<< test << " x");
 		if (temp < 100)
 			map.data[data_cell] = temp;
 	}

@@ -154,7 +154,7 @@ Point robot_pose_to_norm_position() {
 float robot_pose_to_yaw(geometry_msgs::Pose &robot_pose) {
 	geometry_msgs::Quaternion robot_quat = robot_pose.orientation;
 	double yaw = tf::getYaw(robot_quat);
-	
+
 	return yaw;
 }
 
@@ -302,8 +302,9 @@ void setup_unfilled_visualization_marker(visualization_msgs::Marker& marker) {
 // input: normalized float points from laser scan
 // output: integer points for publishing
 void get_filled_cells(std::vector<Point> &norm_pts, std::vector<lab2_msgs::index> &filled_cells) {
+    int limit_filled_cells = 0;
 
-	for (int i=0; i<norm_pts.size(); i++) {
+	for (int i=limit_filled_cells; i<norm_pts.size()-limit_filled_cells; i++) {
 		Point scan_point = norm_pts[i];
 
 		Point robot_pos = robot_pose_to_norm_position();
@@ -341,6 +342,16 @@ void points_to_indices(std::vector<Point> points, std::vector<lab2_msgs::index> 
 		curr_index.col = int(round(points[i].y));
 		indices.push_back(curr_index);
 	}
+}
+
+template <typename T> lab2_msgs::index point_to_index(T curr_pt) {
+
+    lab2_msgs::index curr_index;
+
+    curr_index.row = curr_pt.x;
+    curr_index.col = curr_pt.y;
+
+    return curr_index;
 }
 
 
@@ -386,8 +397,8 @@ int main(int argc, char **argv) {
 
 	ros::Subscriber map_details_sub = n.subscribe("/map_meta_data", 10, map_details_callback);
 
-	// ros::Subscriber refined_pose_sub = n.subscribe("/estimatedpose", 10, refined_pose_callback);
-	ros::Subscriber refined_pose_sub = n.subscribe("/ekf_est", 10, refined_pose_callback);
+	ros::Subscriber refined_pose_sub = n.subscribe("/estimatedpose", 10, refined_pose_callback);
+	//ros::Subscriber refined_pose_sub = n.subscribe("/ekf_est", 10, refined_pose_callback);
 
 	//ros::Subscriber refined_pose_sub = n.subscribe("/estimatedpose", 10, refined_pose_callback);
 	// ros::Subscriber refined_pose_sub = n.subscribe("/indoor_pos", 10, refined_pose_callback);
@@ -451,7 +462,7 @@ int main(int argc, char **argv) {
 			// conversion by bresenham could be offset, and set the cells
 			// always to unfilled on the outer edges of the laser scan cone
 			// which acts as an eraser for the filled cells that were detected
-			int ign_rays = 30;
+			int ign_rays = 35;
 			if (i<=ign_rays || (laser_pts.size()-1 - i) <=ign_rays) {
 				continue;
 			}
@@ -464,10 +475,8 @@ int main(int argc, char **argv) {
 		std::set<PointInt>::iterator it;
 		for (it = unfilled_cells_set.begin(); it != unfilled_cells_set.end(); ++it) {
 			PointInt curr_pt = *it;
-			lab2_msgs::index curr_index;
 
-			curr_index.row = curr_pt.x;
-			curr_index.col = curr_pt.y;
+            lab2_msgs::index curr_index = point_to_index(curr_pt);
 
 			unfilled_cells.push_back(curr_index);
 
@@ -476,6 +485,25 @@ int main(int argc, char **argv) {
 			Point real_unfilled = norm_point_to_point(curr_pt_float, _map_data.resolution, min_xy_corner, max_xy_corner);
 			show_unfilled_laser_points(real_unfilled);
 		}
+
+        //hack for robot black trail
+        int robot_width = 2;
+        for (int i=-robot_width; i<=robot_width; i++) {
+            for (int j=-robot_width; j<=robot_width; j++){
+                Point robot_position = robot_pose_to_norm_position();
+                robot_position.x += i;
+                robot_position.y += j;
+
+                lab2_msgs::index curr_index = point_to_index(robot_position);
+                unfilled_cells.push_back(curr_index);
+                //visualization
+                Point curr_pt_float = {.x=robot_position.x, .y = robot_position.y};
+                Point real_unfilled = norm_point_to_point(curr_pt_float, _map_data.resolution, min_xy_corner, max_xy_corner);
+                show_unfilled_laser_points(real_unfilled);
+            }
+        }
+ 
+
 
 		// *******************************
 		// Publish ray_trace output
