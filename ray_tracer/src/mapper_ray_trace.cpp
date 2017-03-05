@@ -349,9 +349,9 @@ void map_details_callback(const nav_msgs::MapMetaData& map_details) {
 }
 
                                                    
-void refined_pose_callback(const geometry_msgs::PoseWithCovarianceStamped& refined_pose) {
+void refined_pose_callback(const geometry_msgs::PoseStamped& refined_pose) {
 
-	_robot_pose = refined_pose.pose.pose;
+	_robot_pose = refined_pose.pose;
 
 }
 
@@ -377,7 +377,7 @@ int main(int argc, char **argv) {
 
 	ros::Subscriber map_details_sub = n.subscribe("/map_meta_data", 10, map_details_callback);
 	// ros::Subscriber refined_pose_sub = n.subscribe("/estimatedpose", 10, refined_pose_callback);
-	ros::Subscriber refined_pose_sub = n.subscribe("/indoor_pos", 10, refined_pose_callback);
+	ros::Subscriber refined_pose_sub = n.subscribe("/ekf_est", 10, refined_pose_callback);
 	ros::Subscriber scan_sub = n.subscribe("/scan", 10, scan_callback);
 
 	//Visualization
