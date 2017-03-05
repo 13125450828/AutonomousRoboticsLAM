@@ -55,6 +55,7 @@ add_message_files(
    FILES
    index.msg
    occupancy_update.msg
+   slam.msg
  )
 
 ## Generate services in the 'srv' folder
