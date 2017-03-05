@@ -223,7 +223,7 @@ void laser_scan_to_points(Point robot_norm_position, float robot_yaw, sensor_msg
 		// NaN distances "erasing" the valid distances, do no trust the 
 		// interleaved NaN distances and ignore them in favor of the 
 		// nearby valid rays
-		if (contiguousNaNs > 15) {
+		if (contiguousNaNs > 20) {
 			farFromObject = true;
 		} else {
 			farFromObject = false;
@@ -443,11 +443,11 @@ int main(int argc, char **argv) {
 		// Getting unfilled_cells
 		std::set<PointInt> unfilled_cells_set;
 		for (int i=0; i<laser_pts.size(); i++) {
-			// Note: Ignore the outer unfilled 15 rays, because the float to int
+			// Note: Ignore the outer unfilled rays, because the float to int
 			// conversion by bresenham could be offset, and set the cells
 			// always to unfilled on the outer edges of the laser scan cone
 			// which acts as an eraser for the filled cells that were detected
-			int ign_rays = 20;
+			int ign_rays = 30;
 			if (i<=ign_rays || (laser_pts.size()-1 - i) <=ign_rays) {
 				continue;
 			}
