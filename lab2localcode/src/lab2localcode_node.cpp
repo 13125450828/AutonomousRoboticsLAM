@@ -94,9 +94,9 @@ void pose_callback(const geometry_msgs::PoseWithCovarianceStamped& msg)
     if (firstIPSUpdate == false){
         firstIPSUpdate = true;  
         for (int i = 0; i < NUM_PARTICLES; i++){
-                particleMatrix(i,1) = ips_x;
-                particleMatrix(i,2) = ips_y;
-                particleMatrix(i,3) = ips_yaw; 
+                particleMatrix(0,i) = ips_x;
+                particleMatrix(1,i) = ips_y;
+                particleMatrix(2,i) = ips_yaw; 
         }
     }
     //ROS_DEBUG("pose_callback X: %f Y: %f Yaw: %f", X, Y, Yaw);
