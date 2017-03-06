@@ -1,4 +1,4 @@
 <launch>
   <!-- Fake laser -->
-  <node pkg="icp" type="icp" name="icp_node" output="screen"/>
+  <node pkg="icp" type="icp" name="icp_node" output="screen" launch-prefix="xterm -e gdb --args"/>
 </launch>

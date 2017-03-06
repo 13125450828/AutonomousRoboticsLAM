@@ -17,7 +17,7 @@
 #include <nav_msgs/OccupancyGrid.h>
 #include "lab2_msgs/occupancy_update.h"
 
-const float MAP_RESOLUTION = 0.01; // 
+const float MAP_RESOLUTION = 0.1; // 
 const int MAP_SIDE_LENGTH = 10;
 const int MAP_WIDTH = uint(MAP_SIDE_LENGTH / MAP_RESOLUTION);
 const int MAP_HEIGHT = MAP_WIDTH;
