@@ -58,6 +58,7 @@ class EKF():
        self.est_pose.pose.orientation.w = 0
        self.est_pose.header.frame_id = "/odom"
 
+       # Just chose values that look like they work
        self.P = np.ones((3,3))*0.0001
 
        self.Q = np.ones((3,3)) * 0.01
@@ -76,9 +77,9 @@ class EKF():
         if not self.have_first_ips: # Use this to align with IPS frame if needed; disable if doing SLAM
           #self.est_pose.pose = msg.pose.pose
           x = self.ExtractState(msg.pose)
-          self.est_x = x[0][0]
-          self.est_y = x[1][0]
-          self.est_theta = x[2][0]
+          self.est_x = float(x[0][0])
+          self.est_y = float(x[1][0])
+          self.est_theta = float(x[2][0])
           self.have_first_ips = True
 
     def odom_callback(self, msg):
@@ -91,7 +92,8 @@ class EKF():
 
     def MakeA(self):
         th = self.est_theta
-        A = np.matrix( [[1, -math.sin(th), -math.cos(th)] , [1, math.cos(th), math.sin(th)] , [0, 0, 1]])
+        # derived on paper
+        A = np.matrix( [[1, 0, -math.sin(th)*self.odom.twist.twist.linear.x] , [0, 1, math.cos(th)*self.odom.twist.twist.linear.x] , [0, 0, 1]])
         return A
 
     def Predict(self):
@@ -120,7 +122,9 @@ class EKF():
         return x
 
     def UpdateIPS(self):
-        print("Running Update")
+        print("Running IPS Update")
+
+        # get state vector, and measured vector
         x = np.array([[self.est_x], [self.est_y], [self.est_theta]])
         x_meas = self.ExtractState(self.ips_pose)
 
@@ -137,15 +141,18 @@ class EKF():
         print(x_meas)
 
         x = x + K * (x_meas - x)
+        self.est_x = float(x[0][0])
+        self.est_y = float(x[1][0])
+        self.est_theta = float(x[2][0])
 
-        self.P = (np.ones((3,3)) - K) * self.P
+        self.P = (np.identity(3) - K) * self.P
 
         self.BuildMsg()
         self.have_ips = False
         self.est_pub_special.publish(self.est_pose)
 
     def UpdateICP(self):
-        print("Running Update")
+        print("Running ICP Update")
         x = np.array([[self.est_x], [self.est_y], [self.est_theta]])
         x_meas = self.ExtractState(self.icp_pose)
 
@@ -155,21 +162,31 @@ class EKF():
         else:
           # find a better way to deal with singularity
           print(np.linalg.matrix_rank(temp))
-          K = self.P * np.linalg.pinv(temp)
+          try:
+            K = self.P * np.linalg.pinv(temp)
+          except np.linalg.linalg.LinAlgError:
+            print(self.P)
+            return
 
         print(x)
         print(K)
         print(x_meas)
 
         x = x + K * (x_meas - x)
+        self.est_x = float(x[0][0])
+        print("Est x")
+        print(self.est_x)
+        self.est_y = float(x[1][0])
+        self.est_theta = float(x[2][0])
 
-        self.P = (np.ones((3,3)) - K) * self.P
+        self.P = (np.identity(3) - K) * self.P
 
         self.BuildMsg()
         self.have_icp = False
         self.est_pub_special.publish(self.est_pose)
 
     def BuildMsg(self):
+        # Take estimated state and build a pose
         self.est_pose.pose.position.x = self.est_x
         self.est_pose.pose.position.y = self.est_y
         self.est_pose.pose.position.z = 0
@@ -184,20 +201,21 @@ class EKF():
 
         while not rospy.is_shutdown():
 
+          if self.have_odom:
+            self.Predict()
+            #print(self.est_pose)
+            #print(self.P)
 
-              if self.have_odom:
-                self.Predict()
-                #print(self.est_pose)
-                #print(self.P)
+          if self.have_icp:
+            self.UpdateICP()
 
-              if self.have_icp:
-                self.UpdateICP()
-
-              if self.have_ips:
-                self.UpdateIPS()
+          if self.have_ips:
+            self.UpdateIPS()
 
 
-              rospy.sleep(self.dt)
+          time.sleep(self.dt)
+
+        print("Exiting")
 
 
 if __name__ == "__main__":
