@@ -64,10 +64,10 @@ class EKF():
        self.est_pose.header.frame_id = "/odom"
 
        # Just chose values that look like they work
-       self.P = np.ones((3,3))*0.0001
+       self.P = np.identity(3)*0.0001
 
        self.Q = np.identity(3) * 0.01
-       self.R = np.identity(3) * 0.01
+       self.R = np.identity(3) * 0.005
 
        self.C = np.identity(3) # Will try to remove C from matrix math
 
@@ -193,7 +193,7 @@ class EKF():
 
 
           self.path.poses.append(self.est_pose)
-          self.path_pub.publish(path)
+          self.path_pub.publish(self.path)
           time.sleep(self.dt)
 
         print("Exiting")

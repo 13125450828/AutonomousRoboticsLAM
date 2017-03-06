@@ -17,7 +17,7 @@
 #include <nav_msgs/OccupancyGrid.h>
 #include "lab2_msgs/occupancy_update.h"
 
-const float MAP_RESOLUTION = 0.1;
+const float MAP_RESOLUTION = 0.01; // 
 const int MAP_SIDE_LENGTH = 10;
 const int MAP_WIDTH = uint(MAP_SIDE_LENGTH / MAP_RESOLUTION);
 const int MAP_HEIGHT = MAP_WIDTH;
@@ -69,6 +69,8 @@ void occupancy_update_callback(const lab2_msgs::occupancy_update& msg)
 	{
 		j = MAP_WIDTH + msg.unfilled[intI].row;
 		i = MAP_WIDTH + msg.unfilled[intI].col;
+		//i = msg.unfilled[intI].row;
+		//j = msg.unfilled[intI].col;
 		
 		if (i>=0 && j>=0  && i < MAP_WIDTH && j<MAP_HEIGHT)
 		{
@@ -83,7 +85,7 @@ void occupancy_update_callback(const lab2_msgs::occupancy_update& msg)
 		// Update
 		int test = inv_log_odd(empty_L + prev_L + initial_L);
 		temp = char(inv_log_odd(empty_L + prev_L + initial_L));
-		ROS_INFO_STREAM("UF " << (int)temp << " " << test << " x");
+		//ROS_INFO_STREAM("UF " << (int)temp << " " << test << " x");
 		if (temp < 100)
 			map.data[data_cell] = temp;
 	}
@@ -92,6 +94,8 @@ void occupancy_update_callback(const lab2_msgs::occupancy_update& msg)
 	{
 		j = MAP_WIDTH + msg.filled[intI].row;
 		i = MAP_WIDTH + msg.filled[intI].col;
+		//i = msg.filled[intI].row;
+		//j = msg.filled[intI].col;
 
 		if (i>=0 && j>=0 && i < MAP_WIDTH && j < MAP_HEIGHT)
 		{
@@ -106,7 +110,7 @@ void occupancy_update_callback(const lab2_msgs::occupancy_update& msg)
 		// Update
 		int test = inv_log_odd(empty_L + prev_L + initial_L);
 		temp = char(inv_log_odd(occupied_L + prev_L + initial_L));
-		ROS_INFO_STREAM("F  " << (int)temp << " "<< test << " x");
+		//ROS_INFO_STREAM("F  " << (int)temp << " "<< test << " x");
 		if (temp < 100)
 			map.data[data_cell] = temp;
 	}
@@ -156,7 +160,8 @@ int main(int argc, char **argv)
 
 	while (ros::ok())
 	{
-		loop_rate.sleep(); //Maintain the loop rate
+		//loop_rate.sleep(); //Maintain the loop rate
+		sleep(0.1);
 		ros::spinOnce();   //Check for new messages
     
     	//Main loop code goes here:

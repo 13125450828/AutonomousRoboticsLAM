@@ -56,7 +56,7 @@ class SLAMSink():
     def main(self):
 
         while not rospy.is_shutdown():
-            rospy.sleep(0.05)
+            time.sleep(0.05)
 
             if not self.is_paused:
                 if self.have_scan and self.have_pose:

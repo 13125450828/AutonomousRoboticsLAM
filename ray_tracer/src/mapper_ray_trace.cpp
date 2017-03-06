@@ -61,6 +61,7 @@ float map_resolution_offset =  0.00000000150;
 
 bool gotMapMetaData = false;
 bool gotNewLaserScan = false;
+bool gotNewRobotPose = true;
 
 // float laser_scan_range = 5.0f;
 float laser_scan_range = 10.0f;
@@ -372,6 +373,7 @@ void map_details_callback(const nav_msgs::MapMetaData& map_details) {
 void refined_pose_callback(const geometry_msgs::PoseStamped& refined_pose) { //for estimatedpose
 
 	_robot_pose = refined_pose.pose;
+    gotNewRobotPose = true;
 
 }
 
@@ -397,8 +399,8 @@ int main(int argc, char **argv) {
 
 	ros::Subscriber map_details_sub = n.subscribe("/map_meta_data", 10, map_details_callback);
 
-	ros::Subscriber refined_pose_sub = n.subscribe("/estimatedpose", 10, refined_pose_callback);
-	//ros::Subscriber refined_pose_sub = n.subscribe("/ekf_est", 10, refined_pose_callback);
+	//ros::Subscriber refined_pose_sub = n.subscribe("/estimatedpose", 10, refined_pose_callback);
+	ros::Subscriber refined_pose_sub = n.subscribe("/ekf_est", 10, refined_pose_callback);
 
 	//ros::Subscriber refined_pose_sub = n.subscribe("/estimatedpose", 10, refined_pose_callback);
 	// ros::Subscriber refined_pose_sub = n.subscribe("/indoor_pos", 10, refined_pose_callback);
@@ -415,15 +417,17 @@ int main(int argc, char **argv) {
 
 	while (ros::ok()) {
 
-		loop_rate.sleep(); //Maintain the loop rate
+		//loop_rate.sleep(); //Maintain the loop rate
+        sleep(0.1);
      	ros::spinOnce();
 
      	ROS_INFO("Published RayTrace");
 
-     	if (!gotMapMetaData || !gotNewLaserScan) {
+     	if (!gotMapMetaData || !gotNewLaserScan || !gotNewRobotPose) {
      		continue;
      	}
      	gotNewLaserScan = false;
+        gotNewRobotPose = true;
 
 
      	//RESETTING VARIABLES

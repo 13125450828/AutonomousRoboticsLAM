@@ -11,6 +11,7 @@ from lab2_msgs.msg import index
 from lab2_msgs.msg import occupancy_update
 from nav_msgs.msg import MapMetaData
 from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseWithCovarianceStamped
 from sensor_msgs.msg import LaserScan
 from sensor_msgs.msg import PointCloud
 from geometry_msgs.msg import Point32
@@ -27,7 +28,7 @@ class FakeRayTrace():
        self.meta_sub = rospy.Subscriber('/map_meta_data', MapMetaData, callback=self.NewMetaData)
        self.vis_pub = rospy.Publisher('/raytrace_cloud', PointCloud, queue_size=5)
 
-       self.pose_sub = rospy.Subscriber('/indoor_pos', PoseStamped, callback=self.pose_callback)
+       self.pose_sub = rospy.Subscriber('/ekf_est', PoseStamped, callback=self.pose_callback)
        self.laser_sub = rospy.Subscriber('/scan', LaserScan, callback=self.laser_callback)
 
        self. tf_listener = tf.TransformListener()
@@ -43,7 +44,7 @@ class FakeRayTrace():
        self.recieved_data = False
 
     def pose_callback(self, msg):
-        self.pose = msg
+        self.pose = msg.pose
         self.have_pose = True
         #print("Got Pose")
 
@@ -71,7 +72,7 @@ class FakeRayTrace():
         self.map_data = msg
 
     def BuildCloud(self):
-        print("Building Cloud")
+        #print("Building Cloud")
         cloud = PointCloud()
         cloud.header.frame_id = "odom"
         cloud.header.stamp = rospy.Time.now()
@@ -105,18 +106,20 @@ class FakeRayTrace():
         return cloud
 
     def TransformCloud(self, cloud):
-
-        tx = self.pose.pose.position.x
-        ty = self.pose.pose.position.y
-        q = self.pose.pose.orientation
+        #print(self.pose)
+        tx = self.pose.position.x
+        ty = self.pose.position.y
+        q = self.pose.orientation
         th = 1*math.atan2(2.0*(q.w*q.z+q.x+q.y),1.0-2.0*(q.y*q.y + q.z*q.z))
 
-        print(th)
+        #print(th)
         c = math.cos(th)
+        #print(c)
         s = math.sin(th)
-        print("%f %f" % (c, s))
+        #print(s)
+        #print("%f %f" % (c, s))
         #2.0*math.acos(self.pose.pose.orientation.w)
-        print(th*180/math.pi)
+        #print(th*180/math.pi)
 
         cloud_out = PointCloud()
         cloud_out.header.frame_id = "odom"
@@ -128,8 +131,8 @@ class FakeRayTrace():
 
         cloud_out.channels.append(ch)
         
-        print("Transforming Cloud")
-        for i in range(0, len(cloud.points), 5):
+        #print("Transforming Cloud")
+        for i in range(0, len(cloud.points)):
 
             x = cloud.points[i].x
             y = cloud.points[i].y
@@ -140,7 +143,7 @@ class FakeRayTrace():
             point.y = x*s + y*c + ty
             point.z = 0.1
 
-            print("%f %f %f " % (point.x, point.y, point.z))
+            #print("%f %f %f " % (point.x, point.y, point.z))
 
             cloud_out.points.append(point)
             #cloud.points[i].x = x*c - y*s + tx
@@ -160,8 +163,44 @@ class FakeRayTrace():
             return -1
         return 1
 
+    def abs(self, x):
+        if x < 0:
+            return -x
+        return x
 
-    def Bresenham(self, cell1, cell2):
+    def bresenham(self, x0, y0, x1, y1):
+        """Yield integer coordinates on the line from (x0, y0) to (x1, y1).
+
+        Input coordinates should be integers.
+
+        The result will contain both the start and the end point.
+        """
+        dx = x1 - x0
+        dy = y1 - y0
+
+        xsign = 1 if dx > 0 else -1
+        ysign = 1 if dy > 0 else -1
+
+        dx = abs(dx)
+        dy = abs(dy)
+
+        if dx > dy:
+            xx, xy, yx, yy = xsign, 0, 0, ysign
+        else:
+            dx, dy = dy, dx
+            xx, xy, yx, yy = 0, ysign, xsign, 0
+
+        D = 2*dy - dx
+        y = 0
+
+        for x in range(dx + 1):
+            yield x0 + x*xx + y*yx, y0 + x*xy + y*yy
+            if D > 0:
+                y += 1
+                D -= dx
+            D += dy
+
+    def Bresenham2(self, cell1, cell2):
         x0 = int(cell1[0])
         y0 = int(cell1[1])
 
@@ -170,12 +209,14 @@ class FakeRayTrace():
 
         cells = []
 
-        dx = int(math.fabs(x1 - x0))
-        dy = int(math.fabs(y1 - y0))
+        dx = self.abs(x1 - x0)
+        dy = self.abs(y1 - y0)
         dx2 = x1 - x0
         dy2 = y1 - y0
 
-        s = math.fabs(dy) > math.fabs(dx)
+        s = (self.abs(dy) > self.abs(dx))
+
+        
 
         if s:
             dx2 = int(dx)
@@ -188,21 +229,30 @@ class FakeRayTrace():
 
         cells.append((x0, y0))
 
-        while (not(x0 == x1) or not(y0 == y1)):
-            if s: 
-                y0 = y0 + self.sign(dy2) 
-            else:
-                x0 = x0 + self.sign(dx2) 
-            if d < 0:
-                d = d + inc1
-            else:
-                d = d + inc2
-                if s: 
-                    x0 = x0 + self.sign(dx2)
-                else:
-                    y0 = y0 + self.sign(dy2)
-            cells.append((x0, y0))
+        #print("%d, %d, %d" % (inc1, d, inc2))
 
+        while ((x0 != x1) | (y0 != y1)):
+            if s: 
+                #print(1)
+                y0 += self.sign(dy2) 
+            else:
+                #print(2)
+                x0 += self.sign(dx2) 
+            if d < 0:
+                #print(3)
+                d += inc1
+            else:
+                #print(4)
+                d += inc2
+                if s: 
+                    #print(5)
+                    x0 += self.sign(dx2)
+                else:
+                    #print(6)
+                    y0 += self.sign(dy2)
+            #print("%d, %d" % (x0, y0))
+            cells.append((x0, y0))
+        #print("After While")
         return cells
 
     def CreateIndexArray(self, cells):
@@ -236,7 +286,7 @@ class FakeRayTrace():
     def main(self):
 
         while not rospy.is_shutdown():
-            time.sleep(0.1)
+            time.sleep(0.01)
 
             #print("%d %d %d" % (self.recieved_data, self.have_scan, self.have_pose))
 
@@ -246,22 +296,22 @@ class FakeRayTrace():
                 time.sleep(0.2)
                 #cloud = self.tf_listener.transformPointCloud('/odom', cloud) # Replace with Transform
                 cloud = self.TransformCloud(cloud)
-                print("Visualizing")
+                #print("Visualizing")
                 self.vis_pub.publish(cloud)
                 
                 
-                robot_cell = self.GetCell(self.pose.pose.position.x, self.pose.pose.position.y)
-                print("Got Robot Cell: %f %f" % (robot_cell[0], robot_cell[1]))
+                robot_cell = self.GetCell(self.pose.position.x, self.pose.position.y)
+                #print("Got Robot Cell: %f %f" % (robot_cell[0], robot_cell[1]))
 
                 unfilled_cells = set()
                 filled_cells = set()
 
-                print("Tracing Rays")
+                #print("Tracing Rays")
                 for point in cloud.points:
                     end_cell = self.GetCell(point.x, point.y)
-                    print("Before B: %f %f" % (end_cell[0], end_cell[1]))
-                    cells = self.Bresenham(robot_cell, end_cell)
-                    print("After B")
+                    #print("Before B: %f %f" % (end_cell[0], end_cell[1]))
+                    cells = self.bresenham(int(robot_cell[0]), int(robot_cell[1]), int(end_cell[0]), int(end_cell[1]))
+                    #print("After B")
                     unfilled_cells = unfilled_cells.union(cells)
                     #print(end_cell)
                     filled_cells.add(end_cell)
@@ -270,7 +320,7 @@ class FakeRayTrace():
                 #print("Filled")
                 #print(filled_cells)
 
-                print("Sending Output")
+                #print("Sending Output")
                 self.SendMessage(filled_cells, unfilled_cells)
 
         print("Exiting")
