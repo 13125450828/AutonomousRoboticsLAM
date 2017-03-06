@@ -162,7 +162,7 @@ class EKF():
     def UpdateICP(self):
         print("Running ICP Update")
         self.Update(self.icp_pose)
-        self.have_cip = False
+        self.have_icp = False
 
     def BuildMsg(self):
         # Take estimated state and build a pose
