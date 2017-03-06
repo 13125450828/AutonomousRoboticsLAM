@@ -17,6 +17,7 @@ from sensor_msgs.msg import PointCloud
 from geometry_msgs.msg import Point32
 from sensor_msgs.msg import ChannelFloat32
 from nav_msgs.msg import Odometry
+from nav_msgs.msg import Path
 import tf
 
 
@@ -30,6 +31,10 @@ class EKF():
        #self.sink_sub = rospy.Subscriber('/scan', LaserScan, callback=self.laser_callback)
        self.est_pub = rospy.Publisher('/ekf_est', PoseStamped, queue_size=5)
        self.est_pub_special = rospy.Publisher('/ekf_est_special', PoseStamped, queue_size=5)
+
+       self.path = Path()
+       self.path.header.frame_id = "/odom"
+       self.path_pub = rospy.Publisher('/ekf_path', Path, queue_size=5)
 
        self.dt = 0.1;
 
@@ -61,8 +66,8 @@ class EKF():
        # Just chose values that look like they work
        self.P = np.ones((3,3))*0.0001
 
-       self.Q = np.ones((3,3)) * 0.01
-       self.R = np.ones((3,3)) * 0.01
+       self.Q = np.identity(3) * 0.01
+       self.R = np.identity(3) * 0.01
 
        self.C = np.identity(3) # Will try to remove C from matrix math
 
@@ -93,7 +98,7 @@ class EKF():
     def MakeA(self):
         th = self.est_theta
         # derived on paper
-        A = np.matrix( [[1, 0, -math.sin(th)*self.odom.twist.twist.linear.x] , [0, 1, math.cos(th)*self.odom.twist.twist.linear.x] , [0, 0, 1]])
+        A = np.matrix( [[1, 0, -math.sin(th)*self.odom.twist.twist.linear.x*self.dt] , [0, 1, math.cos(th)*self.odom.twist.twist.linear.x*self.dt] , [0, 0, 1]])
         return A
 
     def Predict(self):
@@ -121,12 +126,10 @@ class EKF():
 
         return x
 
-    def UpdateIPS(self):
-        print("Running IPS Update")
-
+    def Update(self, pose):
         # get state vector, and measured vector
         x = np.array([[self.est_x], [self.est_y], [self.est_theta]])
-        x_meas = self.ExtractState(self.ips_pose)
+        x_meas = self.ExtractState(pose)
 
         temp = self.P + self.R
         if np.linalg.matrix_rank(temp) == 3:
@@ -148,42 +151,18 @@ class EKF():
         self.P = (np.identity(3) - K) * self.P
 
         self.BuildMsg()
-        self.have_ips = False
         self.est_pub_special.publish(self.est_pose)
 
+    def UpdateIPS(self):
+        print("Running IPS Update")
+        self.Update(self.ips_pose)
+        self.have_ips = False
+
+        
     def UpdateICP(self):
         print("Running ICP Update")
-        x = np.array([[self.est_x], [self.est_y], [self.est_theta]])
-        x_meas = self.ExtractState(self.icp_pose)
-
-        temp = self.P + self.R
-        if np.linalg.matrix_rank(temp) == 3:
-          K = self.P * np.linalg.inv(temp)
-        else:
-          # find a better way to deal with singularity
-          print(np.linalg.matrix_rank(temp))
-          try:
-            K = self.P * np.linalg.pinv(temp)
-          except np.linalg.linalg.LinAlgError:
-            print(self.P)
-            return
-
-        print(x)
-        print(K)
-        print(x_meas)
-
-        x = x + K * (x_meas - x)
-        self.est_x = float(x[0][0])
-        print("Est x")
-        print(self.est_x)
-        self.est_y = float(x[1][0])
-        self.est_theta = float(x[2][0])
-
-        self.P = (np.identity(3) - K) * self.P
-
-        self.BuildMsg()
-        self.have_icp = False
-        self.est_pub_special.publish(self.est_pose)
+        self.Update(self.icp_pose)
+        self.have_cip = False
 
     def BuildMsg(self):
         # Take estimated state and build a pose
@@ -213,6 +192,8 @@ class EKF():
             self.UpdateIPS()
 
 
+          self.path.poses.append(self.est_pose)
+          self.path_pub.publish(path)
           time.sleep(self.dt)
 
         print("Exiting")
