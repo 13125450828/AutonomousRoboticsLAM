@@ -44,7 +44,7 @@ double ang_v;
 //constants for particle filter 
 const double ROSLOOPRATE = 10; // HZ
 const double dt = 1/ROSLOOPRATE;
-const int NUM_PARTICLES = 50;
+const int NUM_PARTICLES = 100;
 Matrix <float, 4, NUM_PARTICLES, RowMajor> particleMatrix = Matrix<float,4,NUM_PARTICLES>::Zero(); //Particles for our states
 Matrix <float, 4, NUM_PARTICLES, RowMajor> bestPDFParticles = Matrix<float, 4, NUM_PARTICLES>::Zero(); //Matrix used to check weighting 
 bool motion = false; //flag for if the turtlebot actually moved
@@ -399,6 +399,7 @@ int main(int argc, char **argv)
                 
 
                 //Sum x and y for pose output 
+                
                 sum_x = sum_x + particleMatrix(0,i);
                 sum_y = sum_y + particleMatrix(1,i);
                 sum_yaw = sum_yaw + particleMatrix(2,i);
@@ -443,6 +444,10 @@ int main(int argc, char **argv)
             path.poses.push_back(final_pos);            
             double seed;
              if (ipsUpdate == true){
+                sum_x = 0;
+                sum_y = 0;
+                sum_yaw = 0;
+
                 ipsUpdate = false;
             // For resampiling particles based on weight seeding
                 int tempindex = 0;
@@ -464,8 +469,21 @@ int main(int argc, char **argv)
                     bestPDFParticles (0,j) = particleMatrix(0,tempindex);
                     bestPDFParticles (1,j) = particleMatrix(1,tempindex);
                     bestPDFParticles (2,j) = particleMatrix(2,tempindex);
+                    sum_x = sum_x + bestPDFParticles(0,j);
+                    sum_y = sum_y + bestPDFParticles(1,j);
+                    sum_yaw = sum_yaw + bestPDFParticles(2,j);
                 }
                 particleMatrix = bestPDFParticles; //store updated particles
+
+                final_pos.pose.position.x = sum_x / NUM_PARTICLES;
+                final_pos.pose.position.y = sum_y / NUM_PARTICLES;
+                final_pos.pose.position.z = 0;
+                geometry_msgs::Quaternion est_quat;
+                est_quat.x=0;
+                est_quat.y = 0;
+                est_quat.z=sin(sum_yaw/NUM_PARTICLES/2);
+                est_quat.w=cos(sum_yaw/NUM_PARTICLES/2);//tf::createQuaternionMsgFromYaw(sum_yaw/NUM_PARTICLES);
+                final_pos.pose.orientation = est_quat;
                 pose_pub.publish(final_pos);
                 } 
             }
